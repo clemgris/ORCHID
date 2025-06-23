@@ -240,7 +240,7 @@ if __name__ == "__main__":
         debug_path=args.debug_path,
         conf_dir=conf_dir,
         num_data=args.num_data,
-        task=args.task,
+        task=[args.task],
         saving_path=os.path.join(saving_path, "training"),
     )
 
@@ -256,7 +256,7 @@ if __name__ == "__main__":
         debug_path=args.debug_path,
         conf_dir=conf_dir,
         num_data=1,
-        task=args.task,
+        task=[args.task],
         saving_path=os.path.join(saving_path, "validation"),
     )
 
