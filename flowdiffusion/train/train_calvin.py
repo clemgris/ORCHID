@@ -98,6 +98,9 @@ def main(args):
                     "diffuse_on": diffuse_on,
                     "norm_feat": args.norm,
                     "feat_patch_size": args.feat_patch_size,
+                    "auto_lang_name": "filtered_auto_lang_ann"
+                    if args.use_filtered_data
+                    else "auto_lang_ann",
                 },
             },
             "train_num_steps": args.train_num_steps,
@@ -620,6 +623,11 @@ if __name__ == "__main__":
         type=float,
         default=0.0,
     )  # set to temporal loss weight
+    parser.add_argument(
+        "--use_filtered_data",
+        action="store_true",
+        help="Use filtered data (expert successes) for evaluation.",
+    )
     args = parser.parse_args()
 
     print()
