@@ -93,7 +93,7 @@ if __name__ == "__main__":
         "--debug_path",
         type=str,
         help="Path to save debug images.",
-        default="/home/grislain/AVDC/debug_sequential",
+        default=None,
     )
 
     parser.add_argument(
@@ -228,11 +228,6 @@ if __name__ == "__main__":
         os.makedirs(
             os.path.join(saving_path, subdir, "lang_annotations"), exist_ok=True
         )
-
-    if args.debug_path:
-        # Create debug folder
-        debug_path = Path(config.debug_path)
-        os.makedirs(debug_path, exist_ok=True)
 
     rollout_cfg = OmegaConf.load(rollout_cfg_path)
     env = hydra.utils.instantiate(
