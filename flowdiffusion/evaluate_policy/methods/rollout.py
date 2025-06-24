@@ -55,7 +55,7 @@ def rollout_with_oracle(
             start_info, current_info, {task.replace(" ", "_")}
         )
 
-        if args.save_failures:
+        if args.save_failures and hasattr(model, "sub_goals"):
             sample_subgoals = (
                 step % model.ref_traj_length == 0 if model.replan else step == 0
             )
@@ -184,7 +184,8 @@ def rollout_data_collection(
     start_info = env.get_info()
 
     frames = []
-    for step in range(65):
+    obs_list = []
+    for step in range(70):
         # Count the number of frames in the saving folder
         frame_idx = sum(
             1
@@ -207,6 +208,7 @@ def rollout_data_collection(
         }
         frames.append(frame)
         obs, _, _, current_info = env.step(action)
+        obs_list.append(obs["rgb_obs"]["rgb_static"][0, 0])
 
         # check if current step solves a task
         current_task_info = task_oracle.get_task_info_for_set(
@@ -222,6 +224,26 @@ def rollout_data_collection(
                     f"episode_{idx:07d}.npz",
                 )
                 np.savez(frame_path, **frame)
+
+            print(colored("S", "green"), end=" ")
+            success_path = os.path.join(saving_path, "successes")
+            os.makedirs(success_path, exist_ok=True)
+            success_idx = len(os.listdir(success_path))
+            save_gif(
+                obs_list,
+                os.path.join(success_path, f"trajectory_{subtask}_{success_idx}.gif"),
+                duration=1.0,
+            )
+
             return True, step, (frame_idx + 1, idx), lang_annotation
 
-    return False, step, None
+    print(colored("F", "red"), end=" ")
+    failures_path = os.path.join(saving_path, "failures")
+    os.makedirs(failures_path, exist_ok=True)
+    failure_idx = len(os.listdir(failures_path))
+    save_gif(
+        obs_list,
+        os.path.join(failures_path, f"trajectory_{subtask}_{failure_idx}.gif"),
+        duration=1.0,
+    )
+    return False, step, (0, 0), None
