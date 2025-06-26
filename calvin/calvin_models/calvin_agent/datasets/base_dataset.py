@@ -65,7 +65,7 @@ class BaseDataset(Dataset):
         max_window_size: int = 32,
         pad: bool = True,
         aux_lang_loss_window: int = 1,
-        diffuse_on: str = "pixel",
+        goal: str = "pixel",
         norm_feat: bool = False,
         feat_patch_size: int = 16,
         auto_lang_name: str = "auto_lang_ann",
@@ -75,8 +75,8 @@ class BaseDataset(Dataset):
         self.proprio_state = proprio_state
         self.transforms = transforms
         self.with_lang = key == "lang"
-        self.with_feat = diffuse_on != "pixel"
-        self.diffuse_on = diffuse_on
+        self.with_feat = goal != "pixel"
+        self.goal = goal
         self.relative_actions = "rel_actions" in self.observation_space["actions"]
         self.auto_lang_name = auto_lang_name
 
@@ -97,13 +97,13 @@ class BaseDataset(Dataset):
         logger.info(f"loading dataset at {self.abs_datasets_dir}")
         logger.info("finished loading dataset")
 
-        self.feat_stats_path = self.abs_datasets_dir / f"../{self.diffuse_on}_stats.pt"
+        self.feat_stats_path = self.abs_datasets_dir / f"../{self.goal}_stats.pt"
         if os.path.exists(self.feat_stats_path):
             self.feat_stats = torch.load(self.feat_stats_path)["dino_features"]
         else:
             self.feat_stats = None
-            assert self.diffuse_on == "pixel", (
-                f"Cannot diffuse on {self.diffuse_on} without dino stats file, not found in {self.feat_stats_path}."
+            assert self.goal == "pixel", (
+                f"Cannot diffuse on {self.goal} without dino stats file, not found in {self.feat_stats_path}."
             )
 
         self.norm_feat = norm_feat

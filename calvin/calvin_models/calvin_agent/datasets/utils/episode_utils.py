@@ -83,13 +83,23 @@ def process_rgb(
         assert len(rgb_obs.shape) == 4
         if window_size == 0 and seq_idx == 0:  # single file loader
             # To Square image
-            seq_rgb_obs_ = torch.from_numpy(rgb_obs).byte().permute(0, 3, 1, 2)
+            if isinstance(rgb_obs, np.ndarray):
+                seq_rgb_obs_ = torch.from_numpy(rgb_obs).byte().permute(0, 3, 1, 2)
+            elif isinstance(rgb_obs, torch.Tensor):
+                seq_rgb_obs_ = rgb_obs.byte().permute(0, 3, 1, 2)
+            else:
+                raise TypeError(f"Unsupported type {type(rgb_obs)} for rgb_obs")
         else:  # episode loader
-            seq_rgb_obs_ = (
-                torch.from_numpy(rgb_obs[seq_idx : seq_idx + window_size])
-                .byte()
-                .permute(0, 3, 1, 2)
-            )
+            if isinstance(rgb_obs, np.ndarray):
+                seq_rgb_obs_ = (
+                    torch.from_numpy(rgb_obs[seq_idx : seq_idx + window_size])
+                    .byte()
+                    .permute(0, 3, 1, 2)
+                )
+            elif isinstance(rgb_obs, torch.Tensor):
+                seq_rgb_obs_ = (
+                    rgb_obs[seq_idx : seq_idx + window_size].byte().permute(0, 3, 1, 2)
+                )
         # we might have different transformations for the different cameras
         if rgb_obs_key in transforms:
             seq_rgb_obs_ = transforms[rgb_obs_key](seq_rgb_obs_)

@@ -95,7 +95,7 @@ def main(args):
                     "pad": True,
                     "lang_folder": "lang_annotations",
                     "num_workers": 2,
-                    "diffuse_on": diffuse_on,
+                    "goal": diffuse_on,
                     "norm_feat": args.norm,
                     "feat_patch_size": args.feat_patch_size,
                     "auto_lang_name": "filtered_auto_lang_ann"
@@ -116,15 +116,15 @@ def main(args):
 
     sample_per_seq = cfg.datamodule.lang_dataset.num_subgoals + 1
 
-    if "dino" in cfg.datamodule.lang_dataset.diffuse_on:
+    if "dino" in cfg.datamodule.lang_dataset.goal:
         assert args.feat_patch_size % 16 == 0, "Dino patch size must be multiple of 16"
         target_size = (args.feat_patch_size, args.feat_patch_size)
         channel = 768
-    elif "r3m" in cfg.datamodule.lang_dataset.diffuse_on:
+    elif "r3m" in cfg.datamodule.lang_dataset.goal:
         assert args.feat_patch_size % 7 == 0, "R3M patch size must be multiple of 7"
         target_size = (args.feat_patch_size, args.feat_patch_size)
         channel = 512
-    elif cfg.datamodule.lang_dataset.diffuse_on == "pixel":
+    elif cfg.datamodule.lang_dataset.goal == "pixel":
         target_size = (96, 96)
         if cfg.datamodule.lang_dataset.obs_space.depth_obs != []:
             # RGB-D
@@ -134,7 +134,7 @@ def main(args):
             channel = 3 * len(cfg.datamodule.lang_dataset.obs_space.rgb_obs)
     else:
         raise ValueError(
-            f"Diffusion type {cfg.datamodule.lang_dataset.diffuse_on} not supported."
+            f"Diffusion type {cfg.datamodule.lang_dataset.goal} not supported."
         )
 
     transforms = OmegaConf.load(
@@ -380,7 +380,7 @@ def main(args):
         image.save(str(results_folder / "test_imgs / test_img.png"))
 
         batch_size = 1
-        if cfg.datamodule.lang_dataset.diffuse_on == "pixel":
+        if cfg.datamodule.lang_dataset.goal == "pixel":
             transform = transforms.Compose(
                 [
                     transforms.Resize(target_size),
@@ -424,7 +424,7 @@ def main(args):
                 imageio.mimsave(output_gif, output, duration=200, loop=1000)
                 print(f"Generated {output_gif}")
 
-        elif "dino" in cfg.datamodule.lang_dataset.diffuse_on:
+        elif "dino" in cfg.datamodule.lang_dataset.goal:
             from decoder import TransposedConvDecoder
             from encoder import DinoV2Encoder
 
@@ -529,7 +529,7 @@ def main(args):
                 print(f"Generated {output_gif}")
         else:
             raise ValueError(
-                f"Diffusion type {cfg.datamodule.lang_dataset.diffuse_on} not supported."
+                f"Diffusion type {cfg.datamodule.lang_dataset.goal} not supported."
             )
 
 

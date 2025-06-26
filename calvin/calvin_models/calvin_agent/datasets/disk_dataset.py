@@ -110,8 +110,7 @@ class DiskDiffusionDataset(BaseDataset):
 
     def _get_feat_name(self, file_idx: int) -> Path:
         return Path(
-            self.abs_datasets_dir
-            / f"features_{self.diffuse_on}/features_{file_idx}.npz"
+            self.abs_datasets_dir / f"features_{self.goal}/features_{file_idx}.npz"
         )
 
     def _load_episode(self, idx: int) -> Dict[str, np.ndarray]:
@@ -439,8 +438,7 @@ class DiskImageDataset(BaseDataset):
 
     def _get_feat_name(self, file_idx: int) -> Path:
         return Path(
-            self.abs_datasets_dir
-            / f"features_{self.diffuse_on}/features_{file_idx}.npz"
+            self.abs_datasets_dir / f"features_{self.goal}/features_{file_idx}.npz"
         )
 
     def _generate_frame_indices(self) -> List[Tuple[int, int]]:
@@ -621,9 +619,18 @@ class DiskActionDataset(BaseDataset):
         without_guidance: bool = False,
         save_format: str = "npz",
         pretrain: bool = False,
+        obs: str = "pixel",
         **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
+        self.obs = obs
+
+        self.with_feat = self.obs != "pixel" or self.goal != "pixel"
+        if self.with_feat:
+            self.feat_name = self.obs if self.obs != "pixel" else self.goal
+            if self.obs != "pixel" and "goal" != "pixel":
+                assert self.obs == self.goal
+
         self.without_guidance = without_guidance
         self.save_format = save_format
         if self.save_format == "pkl":
@@ -654,8 +661,7 @@ class DiskActionDataset(BaseDataset):
 
     def _get_feat_name(self, file_idx: int) -> Path:
         return Path(
-            self.abs_datasets_dir
-            / f"features_{self.diffuse_on}/features_{file_idx}.npz"
+            self.abs_datasets_dir / f"features_{self.feat_name}/features_{file_idx}.npz"
         )
 
     def __len__(self) -> int:
@@ -942,142 +948,146 @@ class DiskActionDataset(BaseDataset):
             sequence["actions"]
         )
 
+    # Process target/goal observations
+    def extract_targets(self, sequence, data_key, apply_aug=False):
+        static, gripper = [], []
+        for key, val in sequence[data_key].items():
+            if key == f"{data_key.split('_')[0]}_static":
+                img = val[-1]
+                static.append(
+                    get_stochastic_augmentation(p=self.prob_data_aug)(img)
+                    if apply_aug
+                    else img
+                )
+            elif key == f"{data_key.split('_')[0]}_gripper":
+                img = val[-1]
+                gripper.append(
+                    get_stochastic_augmentation(p=self.prob_data_aug)(img)
+                    if apply_aug
+                    else img
+                )
+        return static, gripper
+
+    # Extract initial observations
+    def extract_obs(self, sequence, data_key):
+        static, gripper = [], []
+        for key, val in sequence[data_key].items():
+            if key == f"{data_key.split('_')[0]}_static":
+                static.append(val[0])
+            elif key == f"{data_key.split('_')[0]}_gripper":
+                gripper.append(val[0])
+        return static, gripper
+
     def __getitem__(self, idx: Union[int, Tuple[int, int]]) -> Dict:
         """
-        Get sequence of dataset.
+        Get a processed sequence from the dataset.
 
         Args:
             idx: Index of the sequence.
 
         Returns:
-            Loaded sequence.
+            Dictionary containing observations, actions, and optionally goals and features.
         """
-
         sequence = self._get_sequences(idx)
+
         if self.pad:
             pad_size = self._get_pad_size(sequence)
             sequence = self._pad_sequence(sequence, pad_size)
 
-        if not self.with_feat:
-            views_static = []
-            views_gripper = []
-            for key in sequence["rgb_obs"].keys():
-                if key == "rgb_static":
-                    views_static.append(sequence["rgb_obs"][key][0])
-                elif key == "rgb_gripper":
-                    views_gripper.append(sequence["rgb_obs"][key][0])
-            for key in sequence["depth_obs"].keys():
-                if key == "depth_static":
-                    views_static.append(sequence["depth_obs"][key][0])
-                elif key == "depth_gripper":
-                    views_gripper.append(sequence["depth_obs"][key][0])
-
-            assert len(views_static) > 0 or len(views_gripper) > 0
-
-            start_image_static = (
-                torch.cat(views_static, dim=0)[None] if len(views_static) > 0 else None
-            )
-            start_image_gripper = (
-                torch.cat(views_gripper, dim=0)[None]
-                if len(views_gripper) > 0
-                else None
-            )
-
-            target_views_static = []
-            target_views_gripper = []
-
-            for key in sequence["rgb_obs"].keys():
-                if key == "rgb_static":
-                    target_views_static.append(
-                        get_stochastic_augmentation(p=self.prob_data_aug)(
-                            sequence["rgb_obs"][key][-1]
-                        )
-                    )
-                elif key == "rgb_gripper":
-                    target_views_gripper.append(
-                        get_stochastic_augmentation(p=self.prob_data_aug)(
-                            sequence["rgb_obs"][key][-1]
-                        )
-                    )
-            for key in sequence["depth_obs"].keys():
-                if key == "depth_static":
-                    target_views_static.append(sequence["depth_obs"][key][-1])
-                elif key == "depth_gripper":
-                    target_views_gripper.append(sequence["depth_obs"][key][-1])
-
-            end_image_static = (
-                torch.cat(target_views_static, dim=0)[None]
-                if len(target_views_static) > 0
-                else None
-            )
-            end_image_gripper = (
-                torch.cat(target_views_gripper, dim=0)[None]
-                if len(target_views_gripper) > 0
-                else None
-            )
-            if self.without_guidance:
-                start_end_images_static = (
-                    start_image_static if len(target_views_static) > 0 else None
-                )
-                start_end_images_gripper = (
-                    start_image_gripper if len(target_views_gripper) > 0 else None
-                )
-            else:
-                start_end_images_static = (
-                    torch.cat([start_image_static, end_image_static], dim=0)
-                    if len(target_views_static) > 0
-                    else None
-                )
-                start_end_images_gripper = (
-                    torch.cat([start_image_gripper, end_image_gripper], dim=0)
-                    if len(target_views_gripper) > 0
-                    else None
-                )
-
-        elif self.with_feat:
-            start_image = sequence["features"][0][None]
-            start_image = rearrange(
-                start_image,
-                "f (w h) c -> f c w h",
-                w=self.feat_patch_size,
-                h=self.feat_patch_size,
-            )
-            end_image = sequence["features"][-1][None]
-            end_image = rearrange(
-                end_image,
-                "f (w h) c -> f c w h",
-                w=self.feat_patch_size,
-                h=self.feat_patch_size,
-            )
-
-            if self.without_guidance:
-                start_end_images_static = start_image
-            else:
-                start_end_images_static = torch.cat([start_image, end_image], dim=0)
-            state = torch.zeros((start_end_images_static.shape[0], 0))
-
-            views_static = [start_image]
-            views_gripper = []
-
-        state = (
-            torch.zeros((start_end_images_static.shape[0], 0))
-            if len(views_static) > 0
-            else torch.zeros((start_end_images_gripper.shape[0], 0))
+        views_static_rgb, views_gripper_rgb = self.extract_obs(sequence, "rgb_obs")
+        views_static_depth, views_gripper_depth = self.extract_obs(
+            sequence, "depth_obs"
         )
 
+        views_static = views_static_rgb + views_static_depth
+        views_gripper = views_gripper_rgb + views_gripper_depth
+
+        assert views_static or views_gripper, "No views found."
+
+        # Combine static/gripper views into tensors
+        def combine_views(views):
+            return torch.cat(views, dim=0)[None] if views else None
+
+        start_image_static = combine_views(views_static)
+        start_image_gripper = combine_views(views_gripper)
+
+        targets_static_rgb, targets_gripper_rgb = self.extract_targets(
+            sequence, "rgb_obs", apply_aug=True
+        )
+        targets_static_depth, targets_gripper_depth = self.extract_targets(
+            sequence, "depth_obs"
+        )
+
+        target_views_static = targets_static_rgb + targets_static_depth
+        target_views_gripper = targets_gripper_rgb + targets_gripper_depth
+
+        end_image_static = combine_views(target_views_static)
+        end_image_gripper = combine_views(target_views_gripper)
+
+        # Handle features if enabled
+        if self.with_feat:
+            feat_start_images_static = rearrange(
+                sequence["features"][0][None],
+                "f (w h) c -> f c w h",
+                w=self.feat_patch_size,
+                h=self.feat_patch_size,
+            )
+            feat_end_images_static = rearrange(
+                sequence["features"][-1][None],
+                "f (w h) c -> f c w h",
+                w=self.feat_patch_size,
+                h=self.feat_patch_size,
+            )
+
+        # Determine state tensor
+        state = (
+            torch.zeros((start_image_static.shape[0], 0))
+            if views_static
+            else torch.zeros((start_image_gripper.shape[0], 0))
+        )
+
+        # Actions
         actions = sequence["actions"][:-1]
         action_is_pad = torch.zeros_like(actions)
 
+        # Compose result
         res = {
             "observation.state": state,
             "action": actions,
             "action_is_pad": action_is_pad,
             "text": sequence["lang"],
         }
+
+        # Add static camera data
         if len(views_static) > 0:
-            res["observation.image_static"] = start_end_images_static
+            if self.obs == "pixel":
+                res["observation.image_static"] = start_image_static
+            else:
+                res["observation.feat_static"] = feat_start_images_static
+
+            if not self.without_guidance:
+                if self.goal == "pixel":
+                    res["observation.image_goal_static"] = end_image_static
+                else:
+                    res["observation.feat_goal_static"] = feat_end_images_static
+
+        # Add gripper camera data
         if len(views_gripper) > 0:
-            res["observation.image_gripper"] = start_end_images_gripper
+            if self.obs == "pixel":
+                res["observation.image_gripper"] = start_image_gripper
+            else:
+                raise NotImplementedError(
+                    "Only pixel observations are supported for gripper images."
+                )
+
+            if not self.without_guidance:
+                if self.goal == "pixel":
+                    res["observation.image_goal_gripper"] = end_image_gripper
+                elif self.goal == "feat":
+                    raise NotImplementedError(
+                        "Gripper images are not supported for feat goal."
+                    )
+
         return res
 
 
@@ -1129,8 +1139,7 @@ class DiskEvaluatorDataset(BaseDataset):
 
     def _get_feat_name(self, file_idx: int) -> Path:
         return Path(
-            self.abs_datasets_dir
-            / f"features_{self.diffuse_on}/features_{file_idx}.npz"
+            self.abs_datasets_dir / f"features_{self.goal}/features_{file_idx}.npz"
         )
 
     def _load_episode(self, idx: int) -> Dict[str, np.ndarray]:
@@ -1372,6 +1381,7 @@ class DiskDiffusionOracleDataset(BaseDataset):
         save_format: str = "npz",
         pretrain: bool = False,
         without_guidance: bool = False,
+        obs: str = "pixel",
         **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
@@ -1382,6 +1392,9 @@ class DiskDiffusionOracleDataset(BaseDataset):
             self.load_file = load_npz
         else:
             raise NotImplementedError
+
+        self.obs = obs
+
         self.pretrain = pretrain
         self.num_subgoals = num_subgoals
         if self.with_lang:
@@ -1402,8 +1415,7 @@ class DiskDiffusionOracleDataset(BaseDataset):
 
     def _get_feat_name(self, file_idx: int) -> Path:
         return Path(
-            self.abs_datasets_dir
-            / f"features_{self.diffuse_on}/features_{file_idx}.npz"
+            self.abs_datasets_dir / f"features_{self.goal}/features_{file_idx}.npz"
         )
 
     def _load_episode(self, idx: int) -> Dict[str, np.ndarray]:
@@ -1695,8 +1707,7 @@ class DiskFilterDataset(BaseDataset):
 
     def _get_feat_name(self, file_idx: int) -> Path:
         return Path(
-            self.abs_datasets_dir
-            / f"features_{self.diffuse_on}/features_{file_idx}.npz"
+            self.abs_datasets_dir / f"features_{self.goal}/features_{file_idx}.npz"
         )
 
     def _load_episode(self, idx: int) -> Dict[str, np.ndarray]:
