@@ -58,10 +58,8 @@ def main(args):
         raise ValueError(f"Unknown dataset name {args.train_on}")
     print(f"Training on {dataset_name} dataset")
 
-    if args.diffuse_on != "pixel":
-        diffuse_on = f"{args.diffuse_on}_{args.feat_patch_size}"
-    else:
-        diffuse_on = args.diffuse_on
+    goal = args.goal if args.goal == "pixel" else f"{args.goal}_{args.feat_patch_size}"
+    obs = args.obs if args.obs == "pixel" else f"{args.obs}_{args.feat_patch_size}"
 
     cfg = DictConfig(
         {
@@ -100,11 +98,12 @@ def main(args):
                     "pad": True,
                     "lang_folder": "lang_annotations",
                     "num_workers": 2,
-                    "diffuse_on": diffuse_on,
                     "norm_feat": args.norm,
                     "prob_aug": args.data_aug_prob,
                     "feat_patch_size": args.feat_patch_size,
                     "without_guidance": args.without_guidance,
+                    "goal": goal,
+                    "obs": obs,
                 },
             },
             "training_steps": args.training_steps,  # In gradient steps
@@ -124,6 +123,7 @@ def main(args):
             "calvin/calvin_models/conf/datamodule/transforms/play_basic.yaml",
         )
     )
+
     data_module = CalvinDataModule(
         cfg.datamodule, transforms=transforms, root_data_dir=cfg.root
     )
@@ -150,24 +150,32 @@ def main(args):
     log_freq = 10
 
     # Observation representation shape
-    if args.diffuse_on == "pixel":
-        image_shape = [n_channels, 96, 96]
-    elif "dino" in args.diffuse_on:
+    if obs == "pixel":
+        obs_shape = [n_channels, 96, 96]
+    elif "dino" in obs:
         assert args.feat_patch_size % 16 == 0, (
             f"Feature patch size {args.feat_patch_size} must be a multiple of 16 for DINO features."
         )
-        image_shape = [768, args.feat_patch_size, args.feat_patch_size]
-    elif "r3m" in args.diffuse_on:
+        obs_shape = [768, args.feat_patch_size, args.feat_patch_size]
+    elif "r3m" in obs:
         assert args.feat_patch_size % 7 == 0, (
             f"Feature patch size {args.feat_patch_size} must be a multiple of 7 for R3M features."
         )
-        image_shape = [512, args.feat_patch_size, args.feat_patch_size]
+        obs_shape = [512, args.feat_patch_size, args.feat_patch_size]
 
-    # Num observation
-    if args.without_guidance:
-        n_obs_steps = 1
-    else:
-        n_obs_steps = 2  # (observation + target)
+    # Goal representation shape
+    if goal == "pixel":
+        goal_shape = [n_channels, 96, 96]
+    elif "dino" in goal:
+        assert args.feat_patch_size % 16 == 0, (
+            f"Feature patch size {args.feat_patch_size} must be a multiple of 16 for DINO features."
+        )
+        goal_shape = [768, args.feat_patch_size, args.feat_patch_size]
+    elif "r3m" in goal:
+        assert args.feat_patch_size % 7 == 0, (
+            f"Feature patch size {args.feat_patch_size} must be a multiple of 7 for R3M features."
+        )
+        goal_shape = [512, args.feat_patch_size, args.feat_patch_size]
 
     # Text encoder
     if args.text_encoder == "CLIP":
@@ -214,7 +222,7 @@ def main(args):
     # Diffusion Policy
     diff_cfg = DictConfig(
         {
-            "n_obs_steps": n_obs_steps,
+            "n_obs_steps": 1,
             "horizon": int(
                 np.ceil(
                     cfg.datamodule[dataset_name]["max_window_size"]
@@ -232,16 +240,34 @@ def main(args):
             "input_normalization_modes": {},
             "output_normalization_modes": {"action": "min_max"},
             "crop_shape": None,
-            "vision_backbone": "resnet18" if args.diffuse_on == "pixel" else "identity",
+            "vision_backbone": "resnet18",
             "use_text": args.use_text,
             "text_embed_dim": text_embed_dim,
             "final_text_embed_dim": 64,
         }
     )
 
-    diff_cfg["input_shapes"]["observation.image_static"] = image_shape
-    if args.use_gripper:
-        diff_cfg["input_shapes"]["observation.image_gripper"] = image_shape
+    if obs == "pixel":
+        diff_cfg["input_shapes"]["observation.image_static"] = obs_shape
+        if args.use_gripper:
+            diff_cfg["input_shapes"]["observation.image_gripper"] = obs_shape
+    else:
+        diff_cfg["input_shapes"]["observation.feat_static"] = obs_shape
+        if args.use_gripper:
+            raise NotImplementedError(
+                "Gripper features are not implemented for diffusion policy."
+            )
+
+    if goal == "pixel":
+        diff_cfg["input_shapes"]["observation.image_goal_static"] = goal_shape
+        if args.use_gripper:
+            diff_cfg["input_shapes"]["observation.image_goal_gripper"] = goal_shape
+    else:
+        diff_cfg["input_shapes"]["observation.feat_goal_static"] = goal_shape
+        if args.use_gripper:
+            raise NotImplementedError(
+                "Gripper features are not implemented for diffusion policy."
+            )
 
     diff_cfg = DiffusionConfig(**diff_cfg)
     cfg["diff_cfg"] = diff_cfg
@@ -404,11 +430,17 @@ if __name__ == "__main__":
         "--use_gripper", action="store_true"
     )  # set to True to use gripper observations
     parser.add_argument(
-        "--diffuse_on",
+        "--goal",
         type=str,
         default="pixel",
         choices=["pixel", "dino_vit", "dino", "r3m"],
-    )  # set to diffuse on pixel or dino features
+    )  # set to goal type for diffusion (pixel, dino_vit, dino, r3m)
+    parser.add_argument(
+        "--obs",
+        type=str,
+        default="pixel",
+        choices=["pixel", "dino_vit", "dino", "r3m"],
+    )  # set to observation type for diffusion (pixel, dino_vit, dino, r3m)
     parser.add_argument(
         "--feat_patch_size", type=int, default=16
     )  # set to feature patch size for dino features
