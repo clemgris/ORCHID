@@ -117,7 +117,7 @@ if __name__ == "__main__":
                     "pad": True,
                     "lang_folder": "lang_annotations",
                     "num_workers": 2,
-                    "diffuse_on": "pixel",
+                    "goal": "pixel",
                 },
             },
         }
