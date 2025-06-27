@@ -1,5 +1,5 @@
 def update_feat_transform(policy_data_config, transforms_dict):
-    if "dino" in policy_data_config.datamodule.lang_dataset.diffuse_on:
+    if "dino" in policy_data_config.datamodule.lang_dataset.goal:
         for section in ["train", "val"]:
             if hasattr(transforms_dict, section) and hasattr(
                 transforms_dict[section], "rgb_static"
@@ -31,7 +31,7 @@ def update_feat_transform(policy_data_config, transforms_dict):
                             policy_data_config.datamodule.lang_dataset.feat_patch_size
                             * 14
                         )
-    elif "r3m" in policy_data_config.datamodule.lang_dataset.diffuse_on:
+    elif "r3m" in policy_data_config.datamodule.lang_dataset.goal:
         for section in ["train", "val"]:
             if hasattr(transforms_dict, section) and hasattr(
                 transforms_dict[section], "rgb_static"

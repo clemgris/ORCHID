@@ -24,6 +24,7 @@ sys.path.extend(
 # === Local Project Imports ===
 from methods.evaluate_policy import evaluate_policy
 from model.hierarchical_model import HierarchicalModel
+from utils.transform_feat import update_feat_transform
 
 # === CALVIN Imports ===
 from calvin.calvin_env.calvin_env.envs.play_table_env import get_env
@@ -171,21 +172,30 @@ if __name__ == "__main__":
         }
     )
 
-    policy_data_config.datamodule.lang_dataset._target_ = (
-        "calvin_agent.datasets.disk_dataset.DiskDiffusionOracleDataset"
-    )
-    del policy_data_config.datamodule.lang_dataset.prob_aug
-
-    transforms_dict = OmegaConf.load(
+    image_transforms_dict = OmegaConf.load(
         os.path.join(
             ROOT_PATH,
             "calvin/calvin_models/conf/datamodule/transforms/play_basic.yaml",
         )
     )
+    feat_transforms_dict = OmegaConf.load(
+        os.path.join(
+            ROOT_PATH,
+            "calvin/calvin_models/conf/datamodule/transforms/play_features_imagenet.yaml",
+        )
+    )
+    feat_transforms_dict = update_feat_transform(
+        policy_data_config, feat_transforms_dict
+    )
+
+    transforms_dict = {
+        "pixel": image_transforms_dict,
+        "feat": feat_transforms_dict,
+    }
 
     data_module = CalvinDataModule(
         policy_data_config.datamodule,
-        transforms=transforms_dict,
+        transforms=DictConfig({"train": {}, "val": {}}),
         root_data_dir=policy_data_config.root,
     )
     data_module.setup()
@@ -215,7 +225,7 @@ if __name__ == "__main__":
     env = hydra.utils.instantiate(
         rollout_cfg.env_cfg, policy_dataset, device, show_gui=False
     )
-    model = HierarchicalModel(config)
+    model = HierarchicalModel(config, transforms_dict)
     evaluate_policy(
         model,
         env,

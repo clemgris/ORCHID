@@ -2,12 +2,15 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Dict
 
+import hydra
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torchvision
 from einops import rearrange
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 from transformers import (
     AutoTokenizer,
     CLIPTextModel,
@@ -45,13 +48,16 @@ logger = logging.getLogger(__name__)
 
 
 class HierarchicalModel(CalvinBaseModel):
-    def __init__(self, cfg):
+    def __init__(self, cfg, transforms_dict=None):
         self.device = torch.device(cfg.device)
         self.cfg = cfg
         self.reset()
 
         # Debug
         self.debug_path = cfg.debug_path
+
+        # Transforms
+        self._init_tranforms(transforms_dict)
 
         # Load statistics
         self.stats = self._load_stats(cfg)
@@ -79,7 +85,10 @@ class HierarchicalModel(CalvinBaseModel):
             self._init_high_level(cfg)
 
         # Vision encoder
-        self.use_feat = self.cfg.policy.datamodule.lang_dataset.diffuse_on != "pixel"
+        self.use_feat = (
+            self.cfg.policy.datamodule.lang_dataset.goal != "pixel"
+            or self.cfg.policy.datamodule.lang_dataset.obs != "pixel"
+        )
         if self.use_feat:
             self._init_vision_encoder(cfg)
 
@@ -87,7 +96,7 @@ class HierarchicalModel(CalvinBaseModel):
         self.norm_feat = self.cfg.policy.datamodule.lang_dataset.norm_feat
         self.feat_stats_path = (
             Path(self.cfg.policy.root)
-            / f"{self.cfg.policy.datamodule.lang_dataset.diffuse_on}_stats.pt"
+            / f"{self.cfg.policy.datamodule.lang_dataset.goal}_stats.pt"
         )
         if os.path.exists(self.feat_stats_path):
             self.feat_stats = torch.load(self.feat_stats_path)["dino_features"]
@@ -125,9 +134,9 @@ class HierarchicalModel(CalvinBaseModel):
         self.policy.to(self.device)
 
     def _init_vision_encoder(self, cfg):
-        if "dino_vit" in cfg.policy.datamodule.lang_dataset.diffuse_on:
+        if "dino_vit" in cfg.policy.datamodule.lang_dataset.goal:
             self.vision_encoder = ViTEncoder()
-        elif "r3m" in cfg.policy.datamodule.lang_dataset.diffuse_on:
+        elif "r3m" in cfg.policy.datamodule.lang_dataset.goal:
             self.vision_encoder = R3MEncoder("resnet18")
 
     def _init_text_encoder(self, cfg):
@@ -173,7 +182,7 @@ class HierarchicalModel(CalvinBaseModel):
         self.text_encoder.eval()
 
     def _init_high_level(self, cfg):
-        if cfg.high_level.datamodule.lang_dataset.diffuse_on == "pixel":
+        if cfg.high_level.datamodule.lang_dataset.goal == "pixel":
             if (
                 "depth_static"
                 in cfg.high_level.datamodule.lang_dataset.obs_space.depth_obs
@@ -184,7 +193,7 @@ class HierarchicalModel(CalvinBaseModel):
             feature_decoder = None
             target_size = (96, 96)
             channel_mult = (1, 2, 3, 4, 5)
-        elif "dino" in cfg.high_level.datamodule.lang_dataset.diffuse_on:
+        elif "dino" in cfg.high_level.datamodule.lang_dataset.goal:
             feature_decoder = None
             self.high_level_channels = 768
             target_size = (
@@ -285,6 +294,21 @@ class HierarchicalModel(CalvinBaseModel):
         )
         return actions
 
+    def _init_tranforms(self, transforms_dict):
+        self.transforms = {}
+        for key in transforms_dict:
+            self.transforms[key] = {
+                cam: [
+                    hydra.utils.instantiate(transform)
+                    for transform in transforms_dict[key].val[cam]
+                ]
+                for cam in transforms_dict[key].val
+            }
+            self.transforms[key] = {
+                key: torchvision.transforms.Compose(val)
+                for key, val in self.transforms[key].items()
+            }
+
     def reset(self):
         self.steps = 0
 
@@ -308,8 +332,55 @@ class HierarchicalModel(CalvinBaseModel):
         encoded_text = self.text_encoder(**text_ids).last_hidden_state
         return encoded_text
 
-    def _extract_obs(self, obs: dict, idx: int | np.ndarray):
-        if not self.use_feat:
+    def apply_transform(
+        self,
+        episode: Dict[str, np.ndarray],
+        observation_space: DictConfig,
+        transforms: Dict,
+        key: str = "rgb_obs",
+    ) -> Dict[str, Dict[str, torch.Tensor]]:
+        obs_keys = observation_space[key]
+        seq_rgb_obs_dict = {}
+        for _, rgb_obs_key in enumerate(obs_keys):
+            rgb_obs = episode[rgb_obs_key]
+            if rgb_obs.ndim == 3:
+                # Add batch dimension if missing
+                rgb_obs = rgb_obs[None, ...]
+            elif rgb_obs.ndim == 5:
+                assert rgb_obs.shape[0] == 1, "Batch dimension should be 1"
+                rgb_obs = rgb_obs[0]
+            assert rgb_obs.ndim == 4, (
+                f"Expected 4D tensor for {rgb_obs_key}, got {rgb_obs.ndim}D"
+            )
+            if rgb_obs_key in transforms:
+                seq_rgb_obs_ = transforms[rgb_obs_key](rgb_obs)
+                if "depth" in key:
+                    seq_rgb_obs_ = (seq_rgb_obs_ - seq_rgb_obs_.min()) / (
+                        seq_rgb_obs_.max() - seq_rgb_obs_.min()
+                    )
+                    seq_rgb_obs_ = seq_rgb_obs_ * 2 - 1
+            seq_rgb_obs_dict[rgb_obs_key] = seq_rgb_obs_
+        # shape: N_rgb_obs x (BxCxHxW)
+        return seq_rgb_obs_dict
+
+    def _extract_obs(
+        self, obs: dict, idx: int | np.ndarray, space: str = "pixel" or "feat"
+    ):
+        if space == "pixel":
+            # Apply transforms for pixel observations
+            obs["rgb_obs"] = self.apply_transform(
+                obs["rgb_obs"],
+                self.cfg.policy.datamodule.lang_dataset.obs_space,
+                self.transforms["pixel"],
+                "rgb_obs",
+            )
+
+            obs["depth_obs"] = self.apply_transform(
+                obs["depth_obs"],
+                self.cfg.policy.datamodule.lang_dataset.obs_space,
+                self.transforms["pixel"],
+                "depth_obs",
+            )
             views_static = []
             views_gripper = []
             for key in obs["rgb_obs"].keys():
@@ -323,19 +394,27 @@ class HierarchicalModel(CalvinBaseModel):
                 elif key == "depth_gripper":
                     views_gripper.append(obs["depth_obs"][key][idx])
         else:
-            _, image = self.vision_encoder(
-                obs["rgb_obs"]["rgb_static"][idx].to(self.device)
+            # Apply transforms for feature observations
+            obs["rgb_obs"] = self.apply_transform(
+                obs["rgb_obs"],
+                self.cfg.policy.datamodule.lang_dataset.obs_space,
+                self.transforms["feat"],
+                "rgb_obs",
             )
-            image = self._norm_feat_fonct(image)
-            image = rearrange(
-                image,
+            image = obs["rgb_obs"]["rgb_static"][idx].to(self.device)
+            if image.ndim == 3:
+                image = image[None, ...]
+            _, feat = self.vision_encoder(image)
+            feat = self._norm_feat_fonct(feat)
+            feat = rearrange(
+                feat,
                 "f (w h) c -> f c w h",
                 w=self.cfg.policy.datamodule.lang_dataset.feat_patch_size,
                 h=self.cfg.policy.datamodule.lang_dataset.feat_patch_size,
             )
 
-            # Normalise the init image
-            views_static = [image]
+            # Normalise the init feat
+            views_static = [feat]
             views_gripper = []
 
         assert len(views_static) > 0 or len(views_gripper) > 0
@@ -367,13 +446,20 @@ class HierarchicalModel(CalvinBaseModel):
         # Extract text goal embedding
         if self.use_text:
             encoded_text = self._extract_text_embedding(text_goal)
-        init = self._extract_obs(obs, 0)
 
         # Orcale subgoals
         if self.use_oracle_subgoals:
-            self.sub_goals = self._extract_obs(oracle_subgoals, slice(1, None))[None]
+            self.sub_goals = self._extract_obs(
+                oracle_subgoals,
+                slice(1, None),
+                self.cfg.policy.datamodule.lang_dataset.goal,
+            )[None]
         else:
             # Generate sequence of subgoals
+            self.init_subgoal_gen = self._extract_obs(
+                obs, slice(0, 1), self.cfg.policy.datamodule.lang_dataset.goal
+            )
+
             sample_subgoals = (
                 self.steps % self.ref_traj_length == 0
                 if self.replan
@@ -386,11 +472,12 @@ class HierarchicalModel(CalvinBaseModel):
                 )
                 self.sub_goals = (
                     self.high_level.sample(
-                        init[0], [text_goal], 1, self.guidance_weight
+                        self.init_subgoal_gen[0], [text_goal], 1, self.guidance_weight
                     )
                     .cpu()
                     .detach()
                 )
+
                 self.sub_goals = rearrange(
                     self.sub_goals,
                     "b (f c) w h -> b f c w h",
@@ -407,18 +494,33 @@ class HierarchicalModel(CalvinBaseModel):
                 sub_goal_idx = min(
                     self.steps // self.sample_action_every, self.sub_goals.shape[1] - 1
                 )
-
+            init = self._extract_obs(
+                obs, slice(0, 1), self.cfg.policy.datamodule.lang_dataset.obs
+            )
             target = self.sub_goals[:, sub_goal_idx].to(self.device)
-            if self.without_guidance:
-                obs_goal_images = init
-            else:
-                obs_goal_images = torch.cat([init, target], dim=0)
-
-            state = torch.zeros((obs_goal_images.shape[0], 0)).to(self.device)
+            state = torch.zeros((init.shape[0], 0)).to(self.device)
             obs_goal = {
                 "observation.state": state[None],
-                "observation.images": obs_goal_images[None],
             }
+            if (
+                self.cfg.policy.datamodule.lang_dataset.obs
+                == self.cfg.policy.datamodule.lang_dataset.goal
+            ):
+                if self.without_guidance:
+                    obs_goal_images = init
+                else:
+                    # Both obs and goal are images
+                    obs_goal_images = torch.cat([init, target], dim=1)
+                if self.use_feat:
+                    # Both obs and goal are features
+                    obs_goal["observation.feats"] = obs_goal_images[None]
+                else:
+                    obs_goal["observation.images"] = obs_goal_images[None]
+            else:
+                # Only obs is an image, goal is a feature
+                obs_goal["observation.images"] = init[None]
+                obs_goal["observation.feats"] = target[None]
+
             # Using text goal
             if self.use_text:
                 obs_goal["text"] = encoded_text

@@ -44,6 +44,7 @@ def rollout_with_oracle(
     start_info = env.get_info()
     obs_list = []
     subgoals = []
+    init = []
     for step in range(args.ep_len):
         # action = episode["actions"][step]
         action = model.step(obs, lang_annotation, episode)
@@ -61,6 +62,7 @@ def rollout_with_oracle(
             )
             if sample_subgoals:
                 subgoals.append(model.sub_goals[0])
+                init.append(model.init_subgoal_gen)
 
         if len(current_task_info) > 0:
             print(colored("S", "green"), end=" ")
@@ -80,7 +82,7 @@ def rollout_with_oracle(
 
         # Save episode (as png)
         torchvision.utils.save_image(
-            (torch.stack(obs_list) + 1) / 2,
+            (torch.stack(obs_list) / 255).float(),
             os.path.join(
                 failed_episode_path,
                 "trajectory.png",
@@ -89,7 +91,7 @@ def rollout_with_oracle(
         # Save subgoals
         for kk, subgoal in enumerate(subgoals):
             model.save_image(
-                subgoal[:, 0, ...],
+                torch.cat([init[kk].cpu(), subgoal.cpu()]),
                 f"failed_{task.replace(' ', '_')}_{episode['idx']}/subgoals_{kk}.png",
             )
         # Save episode (as gif)
@@ -112,12 +114,12 @@ def rollout(env, model, task_oracle, subtask, val_annotations, debug_path=None):
 
     obs_list = []
     subgoals = []
+    init = []
     for step in range(EP_LEN):
         action = model.step(obs, lang_annotation)
         obs, _, _, current_info = env.step(action)
         if debug_path:
             obs_list.append(obs["rgb_obs"]["rgb_static"][0, 0])
-
         # check if current step solves a task
         current_task_info = task_oracle.get_task_info_for_set(
             start_info, current_info, {subtask}
@@ -128,6 +130,7 @@ def rollout(env, model, task_oracle, subtask, val_annotations, debug_path=None):
             )
             if sample_subgoals:
                 subgoals.append(model.sub_goals[0])
+                init.append(model.init_subgoal_gen)
         if len(current_task_info) > 0:
             print(colored("S", "green"), end=" ")
             return True, step
@@ -145,10 +148,10 @@ def rollout(env, model, task_oracle, subtask, val_annotations, debug_path=None):
             exist_ok=True,
         )
         # Save episode (as png)
-        model.save_image(
-            torch.stack(obs_list),
+        torchvision.utils.save_image(
+            (torch.stack(obs_list) / 255).float(),
             os.path.join(
-                f"failures/failed_{subtask.replace(' ', '_')}_{failure_idx}",
+                failed_episode_path,
                 "trajectory.png",
             ),
         )
@@ -162,7 +165,7 @@ def rollout(env, model, task_oracle, subtask, val_annotations, debug_path=None):
         if not model.cfg.policy.datamodule.lang_dataset.get("without_guidance", False):
             for kk, subgoal in enumerate(subgoals):
                 model.save_image(
-                    subgoal[:, 0, ...],
+                    torch.cat([init[kk].cpu(), subgoal.cpu()]),
                     os.path.join(
                         f"failures/failed_{subtask.replace(' ', '_')}_{failure_idx}",
                         f"subgoals_{kk}.png",

@@ -132,7 +132,7 @@ if __name__ == "__main__":
         high_level_data_config = {}
 
     # Do not change
-    args.ep_len = 240
+    args.ep_len = 70 if args.use_oracle_subgoals else 240
 
     if args.server == "jz":
         data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/CALVIN/task_D_D_jz"
@@ -193,25 +193,30 @@ if __name__ == "__main__":
     else:
         print("Using generated subgoals")
 
-    if policy_data_config.datamodule.lang_dataset.diffuse_on == "pixel":
-        transforms_dict = OmegaConf.load(
-            os.path.join(
-                ROOT_PATH,
-                "calvin/calvin_models/conf/datamodule/transforms/play_basic.yaml",
-            )
+    image_transforms_dict = OmegaConf.load(
+        os.path.join(
+            ROOT_PATH,
+            "calvin/calvin_models/conf/datamodule/transforms/play_basic.yaml",
         )
-    else:
-        transforms_dict = OmegaConf.load(
-            os.path.join(
-                ROOT_PATH,
-                "calvin/calvin_models/conf/datamodule/transforms/play_features_imagenet.yaml",
-            )
+    )
+    feat_transforms_dict = OmegaConf.load(
+        os.path.join(
+            ROOT_PATH,
+            "calvin/calvin_models/conf/datamodule/transforms/play_features_imagenet.yaml",
         )
-        transforms_dict = update_feat_transform(policy_data_config, transforms_dict)
+    )
+    feat_transforms_dict = update_feat_transform(
+        policy_data_config, feat_transforms_dict
+    )
+
+    transforms_dict = {
+        "pixel": image_transforms_dict,
+        "feat": feat_transforms_dict,
+    }
 
     data_module = CalvinDataModule(
         policy_data_config.datamodule,
-        transforms=transforms_dict,
+        transforms=DictConfig({"train": {}, "val": {}}),
         root_data_dir=policy_data_config.root,
     )
     data_module.setup()
@@ -238,6 +243,6 @@ if __name__ == "__main__":
     env = hydra.utils.instantiate(
         rollout_cfg.env_cfg, policy_dataset, device, show_gui=False
     )
-    model = HierarchicalModel(config)
+    model = HierarchicalModel(config, transforms_dict)
 
     evaluate_policy_singlestep(model, env, policy_dataset, args, conf_dir)
