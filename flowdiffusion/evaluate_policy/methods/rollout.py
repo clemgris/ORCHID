@@ -44,7 +44,6 @@ def rollout_with_oracle(
     start_info = env.get_info()
     obs_list = []
     subgoals = []
-    init = []
     for step in range(args.ep_len):
         # action = episode["actions"][step]
         action = model.step(obs, lang_annotation, episode)
@@ -62,7 +61,6 @@ def rollout_with_oracle(
             )
             if sample_subgoals:
                 subgoals.append(model.sub_goals[0])
-                init.append(model.init_subgoal_gen)
 
         if len(current_task_info) > 0:
             print(colored("S", "green"), end=" ")
@@ -91,7 +89,7 @@ def rollout_with_oracle(
         # Save subgoals
         for kk, subgoal in enumerate(subgoals):
             model.save_image(
-                torch.cat([init[kk].cpu(), subgoal.cpu()]),
+                subgoal,
                 f"failed_{task.replace(' ', '_')}_{episode['idx']}/subgoals_{kk}.png",
             )
         # Save episode (as gif)
