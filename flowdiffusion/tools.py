@@ -46,6 +46,8 @@ def assert_configs_equal(cfg1, cfg2, list_exception, path=""):
 
 
 def save_images(img, path: str, nrow: int = 1):
+    if img.ndim == 4:
+        img = img[None, ...]
     img = rearrange(
         img, "f n c h w -> f (n c) h w"
     )  # Ensure img is in the correct format
