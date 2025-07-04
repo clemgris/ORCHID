@@ -132,7 +132,7 @@ if __name__ == "__main__":
         high_level_data_config = {}
 
     # Do not change
-    args.ep_len = 70 if args.use_oracle_subgoals else 240
+    args.ep_len = 240
 
     if args.server == "jz":
         data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/CALVIN/task_D_D_jz"
@@ -149,6 +149,15 @@ if __name__ == "__main__":
         raise ValueError("Invalid server argument")
 
     # load low level config
+    if "lang_dataset" not in policy_data_config.datamodule:
+        assert "vis_dataset" in policy_data_config.datamodule, (
+            "vis_dataset or lanfg_dataset must be present in policy_data_config.datamodule"
+        )
+        policy_data_config.datamodule.lang_dataset = (
+            policy_data_config.datamodule.vis_dataset
+        )
+        policy_data_config.datamodule.lang_dataset.key = "lang"
+
     policy_data_config.datamodule.lang_dataset._target_ = (
         "calvin_agent.datasets.disk_dataset.DiskDiffusionOracleDataset"
     )
@@ -157,6 +166,14 @@ if __name__ == "__main__":
     policy_data_config.datamodule.lang_dataset.auto_lang_name = (
         "filtered_auto_lang_ann" if args.use_filtered_data else "auto_lang_ann"
     )
+
+    if policy_data_config.datamodule.lang_dataset.get("diffuse_on", None) is not None:
+        # Old config
+        policy_data_config.datamodule.lang_dataset.goal = (
+            policy_data_config.datamodule.lang_dataset.diffuse_on
+        )
+        policy_data_config.datamodule.lang_dataset.obs = "pixel"
+        del policy_data_config.datamodule.lang_dataset.diffuse_on
 
     config = DictConfig(
         {
@@ -216,7 +233,7 @@ if __name__ == "__main__":
 
     data_module = CalvinDataModule(
         policy_data_config.datamodule,
-        transforms=DictConfig({"train": {}, "val": {}}),
+        transforms=image_transforms_dict,
         root_data_dir=policy_data_config.root,
     )
     data_module.setup()
