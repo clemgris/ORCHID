@@ -60,7 +60,7 @@ def rollout_with_oracle(
                 step % model.ref_traj_length == 0 if model.replan else step == 0
             )
             if sample_subgoals:
-                subgoals.append(model.sub_goals[0])
+                subgoals.append(model.sub_goals[0, :, 0])
 
         if len(current_task_info) > 0:
             print(colored("S", "green"), end=" ")
@@ -80,7 +80,7 @@ def rollout_with_oracle(
 
         # Save episode (as png)
         torchvision.utils.save_image(
-            (torch.stack(obs_list) / 255).float(),
+            (torch.stack(obs_list) + 1) / 2,
             os.path.join(
                 failed_episode_path,
                 "trajectory.png",
@@ -127,8 +127,8 @@ def rollout(env, model, task_oracle, subtask, val_annotations, debug_path=None):
                 step % model.ref_traj_length == 0 if model.replan else step == 0
             )
             if sample_subgoals:
-                subgoals.append(model.sub_goals[0])
-                init.append(model.init_subgoal_gen)
+                subgoals.append(model.sub_goals[0, :, 0])
+                init.append(model.init_subgoal_gen[0])
         if len(current_task_info) > 0:
             print(colored("S", "green"), end=" ")
             return True, step
