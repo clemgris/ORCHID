@@ -367,20 +367,6 @@ class HierarchicalModel(CalvinBaseModel):
         self, obs: dict, idx: int | np.ndarray, space: str = "pixel" or "feat"
     ):
         if space == "pixel":
-            # Apply transforms for pixel observations
-            obs["rgb_obs"] = self.apply_transform(
-                obs["rgb_obs"],
-                self.cfg.policy.datamodule.lang_dataset.obs_space,
-                self.transforms["pixel"],
-                "rgb_obs",
-            )
-
-            obs["depth_obs"] = self.apply_transform(
-                obs["depth_obs"],
-                self.cfg.policy.datamodule.lang_dataset.obs_space,
-                self.transforms["pixel"],
-                "depth_obs",
-            )
             views_static = []
             views_gripper = []
             for key in obs["rgb_obs"].keys():
@@ -395,13 +381,13 @@ class HierarchicalModel(CalvinBaseModel):
                     views_gripper.append(obs["depth_obs"][key][idx])
         else:
             # Apply transforms for feature observations
-            obs["rgb_obs"] = self.apply_transform(
+            obs["raw_obs"]["rgb_obs"] = self.apply_transform(
                 obs["rgb_obs"],
                 self.cfg.policy.datamodule.lang_dataset.obs_space,
                 self.transforms["feat"],
                 "rgb_obs",
             )
-            image = obs["rgb_obs"]["rgb_static"][idx].to(self.device)
+            image = obs["raw_obs"]["rgb_obs"]["rgb_static"][idx].to(self.device)
             if image.ndim == 3:
                 image = image[None, ...]
             _, feat = self.vision_encoder(image)
@@ -418,7 +404,6 @@ class HierarchicalModel(CalvinBaseModel):
             views_gripper = []
 
         assert len(views_static) > 0 or len(views_gripper) > 0
-
         image_static = torch.cat(views_static, dim=1) if len(views_static) > 0 else None
         image_gripper = (
             torch.cat(views_gripper, dim=1) if len(views_gripper) > 0 else None
@@ -457,7 +442,7 @@ class HierarchicalModel(CalvinBaseModel):
         else:
             # Generate sequence of subgoals
             self.init_subgoal_gen = self._extract_obs(
-                obs, slice(0, 1), self.cfg.policy.datamodule.lang_dataset.goal
+                obs, 0, self.cfg.policy.datamodule.lang_dataset.goal
             )
 
             sample_subgoals = (
@@ -495,7 +480,7 @@ class HierarchicalModel(CalvinBaseModel):
                     self.steps // self.sample_action_every, self.sub_goals.shape[1] - 1
                 )
             init = self._extract_obs(
-                obs, slice(0, 1), self.cfg.policy.datamodule.lang_dataset.obs
+                obs, 0, self.cfg.policy.datamodule.lang_dataset.obs
             )
             target = self.sub_goals[:, sub_goal_idx].to(self.device)
             state = torch.zeros((init.shape[0], 0)).to(self.device)
