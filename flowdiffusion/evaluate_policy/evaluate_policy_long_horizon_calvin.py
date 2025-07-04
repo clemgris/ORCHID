@@ -146,6 +146,14 @@ if __name__ == "__main__":
         os.path.join(args.policy_results_folder, "data_config.yaml")
     )
     policy_data_config.root = data_path
+    if "lang_dataset" not in policy_data_config.datamodule:
+        assert "vis_dataset" in policy_data_config.datamodule, (
+            "vis_dataset or lanfg_dataset must be present in policy_data_config.datamodule"
+        )
+        policy_data_config.datamodule.lang_dataset = (
+            policy_data_config.datamodule.vis_dataset
+        )
+        policy_data_config.datamodule.lang_dataset.key = "lang"
 
     high_level_data_config = OmegaConf.load(
         os.path.join(args.high_level_results_folder, "data_config.yaml")
@@ -195,7 +203,7 @@ if __name__ == "__main__":
 
     data_module = CalvinDataModule(
         policy_data_config.datamodule,
-        transforms=DictConfig({"train": {}, "val": {}}),
+        transforms=image_transforms_dict,
         root_data_dir=policy_data_config.root,
     )
     data_module.setup()
