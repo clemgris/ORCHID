@@ -145,6 +145,8 @@ if __name__ == "__main__":
         data_path = "/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset"
         rollout_cfg_path = "/home/grislain/AVDC/calvin/calvin_models/conf/callbacks/rollout/default.yaml"
         conf_dir = Path("/home/grislain/AVDC/calvin/calvin_models/conf")
+
+        policy_data_config.datamodule.lang_dataset.lang_folder = "lang_annotations"
     else:
         raise ValueError("Invalid server argument")
 
@@ -167,13 +169,19 @@ if __name__ == "__main__":
         "filtered_auto_lang_ann" if args.use_filtered_data else "auto_lang_ann"
     )
 
-    if policy_data_config.datamodule.lang_dataset.get("diffuse_on", None) is not None:
+    if "diffuse_on" in policy_data_config.datamodule.lang_dataset:
         # Old config
         policy_data_config.datamodule.lang_dataset.goal = (
             policy_data_config.datamodule.lang_dataset.diffuse_on
         )
         policy_data_config.datamodule.lang_dataset.obs = "pixel"
         del policy_data_config.datamodule.lang_dataset.diffuse_on
+
+    if "diffuse_on" in high_level_data_config.datamodule.lang_dataset:
+        high_level_data_config.datamodule.lang_dataset.goal = (
+            high_level_data_config.datamodule.lang_dataset.diffuse_on
+        )
+        del high_level_data_config.datamodule.lang_dataset.diffuse_on
 
     config = DictConfig(
         {

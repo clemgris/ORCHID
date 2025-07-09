@@ -127,6 +127,11 @@ if __name__ == "__main__":
     # Do not change
     args.ep_len = 240
 
+    # Load data configs
+    policy_data_config = OmegaConf.load(
+        os.path.join(args.policy_results_folder, "data_config.yaml")
+    )
+
     if args.server == "jz":
         data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/CALVIN/task_D_D_jz"
         rollout_cfg_path = "/lustre/fswork/projects/rech/fch/uxv44vw/clemgris/avdc/calvin/calvin_models/conf/callbacks/rollout/default.yaml"
@@ -138,13 +143,11 @@ if __name__ == "__main__":
         data_path = "/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset"
         rollout_cfg_path = "/home/grislain/AVDC/calvin/calvin_models/conf/callbacks/rollout/default.yaml"
         conf_dir = Path("/home/grislain/AVDC/calvin/calvin_models/conf")
+
+        policy_data_config.datamodule.lang_dataset.lang_folder = "lang_annotations"
     else:
         raise ValueError("Invalid server argument")
 
-    # Load data configs
-    policy_data_config = OmegaConf.load(
-        os.path.join(args.policy_results_folder, "data_config.yaml")
-    )
     policy_data_config.root = data_path
     if "lang_dataset" not in policy_data_config.datamodule:
         assert "vis_dataset" in policy_data_config.datamodule, (
