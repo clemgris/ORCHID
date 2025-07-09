@@ -10,6 +10,7 @@ import hydra
 import numpy as np
 from omegaconf import OmegaConf
 from termcolor import colored
+from tqdm import tqdm
 
 # === Project Path Setup ===
 ROOT_PATH = Path(__file__).resolve().parents[2]
@@ -28,6 +29,7 @@ from calvin.calvin_models.calvin_agent.evaluation.multistep_sequences import (
     get_sequences,
 )
 from calvin.calvin_models.calvin_agent.evaluation.utils import (
+    count_success,
     get_env_state_for_initial_condition,
     get_log_dir,
     print_and_save,
@@ -106,6 +108,7 @@ def evaluate_policy(
     eval_folder = get_log_dir(eval_folder)
 
     eval_sequences = get_sequences(NUM_SEQUENCES)
+    eval_sequences = tqdm(eval_sequences, position=0, leave=True)
 
     results = []
 
@@ -120,6 +123,15 @@ def evaluate_policy(
             debug_path,
         )
         results.append(result)
+        eval_sequences.set_description(
+            " ".join(
+                [
+                    f"{i + 1}/5 : {v * 100:.1f}% |"
+                    for i, v in enumerate(count_success(results))
+                ]
+            )
+            + "|"
+        )
 
     print_and_save(results, eval_sequences, eval_folder, epoch)
 
