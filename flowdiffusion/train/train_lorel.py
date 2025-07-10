@@ -30,9 +30,8 @@ print(f"Total GPUs available: {torch.cuda.device_count()}")
 
 def main(args):
     valid_n = 1
-    sample_per_seq = 2  # 10
 
-    results_folder = "../results_single_debug/lorel"
+    results_folder = args.results_folder
 
     if args.server == "jz":
         data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/TrajectoryDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_50k/data_with_dino_features"
@@ -44,11 +43,14 @@ def main(args):
     cfg = DictConfig(
         {
             "root": data_path,
-            "skip_frames": 10,  # 2
+            "num_subgoals": 5,
             "diffuse_on": "pixel",
             "num_data": num_data,
+            "train_num_steps": 100000,
         },
     )
+
+    sample_per_seq = cfg.num_subgoals
 
     if cfg.diffuse_on == "dino_feat":
         target_size = (16, 16)
@@ -79,7 +81,7 @@ def main(args):
         #     skip_frames=cfg.skip_frames,
         # )
         train_set = ExpertTrainDataset(
-            cfg.root, skip_frames=cfg.skip_frames, diffuse_on=cfg.diffuse_on
+            cfg.root, num_subgoals=cfg.num_subgoals, diffuse_on=cfg.diffuse_on
         )
         # Split train and valid
         valid_inds = [i for i in range(0, len(train_set), len(train_set) // valid_n)][
@@ -95,25 +97,27 @@ def main(args):
         print("Train data:", len(train_set))
         print("Valid data:", len(valid_set))
 
-        ## DEBUG
-        # import torchvision
+        # DEBUG
+    #     import torchvision
 
-        # for idx in range(len(train_set)):
-        #     x, x_cond, task = train_set[idx]
-        #     torchvision.utils.save_image(
-        #         x.reshape((7, 3, 96, 96)), f"train_img_{idx}_{task}.png"
-        #     )
-        #     if idx > 10: break
+    #     for idx in range(len(train_set)):
+    #         x, x_cond, task = train_set[idx]
+    #         torchvision.utils.save_image(
+    #             x.reshape((cfg.num_subgoals, 3, 96, 96)), f"train_img_{idx}_{task}.png"
+    #         )
+    #         if idx > 10:
+    #             break
 
-        # for idx in range(len(valid_set)):
-        #     x, x_cond, task = valid_set[idx]
-        #     torchvision.utils.save_image(
-        #         x.reshape((7, 3, 96, 96)), f"valid_img_{idx}_{task}.png"
-        #     )
-        #     if idx > 10: break
+    #     for idx in range(len(valid_set)):
+    #         x, x_cond, task = valid_set[idx]
+    #         torchvision.utils.save_image(
+    #             x.reshape((cfg.num_subgoals, 3, 96, 96)), f"valid_img_{idx}_{task}.png"
+    #         )
+    #         if idx > 10:
+    #             break
 
     # breakpoint()
-    unet = Unet()
+    unet = Unet(in_channels=3)
 
     if args.server == "jz":
         pretrained_model = (
@@ -137,7 +141,8 @@ def main(args):
         objective="pred_v",
         beta_schedule="cosine",
         min_snr_loss_weight=True,
-        auto_normalize=True,
+        auto_normalize=False,  # True,
+        num_subgoals=cfg.num_subgoals - 1,
     )
 
     trainer = Trainer(
@@ -147,18 +152,19 @@ def main(args):
         train_set=train_set,
         valid_set=valid_set,
         train_lr=1e-4,
-        train_num_steps=60000,
-        save_and_sample_every=2500,
+        train_num_steps=cfg.train_num_steps,
+        save_and_sample_every=args.save_and_sample_every,
         ema_update_every=10,
         ema_decay=0.999,
-        train_batch_size=16,
-        valid_batch_size=32,
+        train_batch_size=args.batch_size,
+        valid_batch_size=1,
         gradient_accumulate_every=1,
         num_samples=valid_n,
         results_folder=results_folder,
-        fp16=True,
+        precision="fp16",
         amp=True,
         calculate_fid=False,
+        feature_decoder=None,
     )
 
     if args.checkpoint_num is not None:
@@ -224,6 +230,9 @@ if __name__ == "__main__":
         "-s", "--server", type=str, default="hacienda"
     )  # set to 'jz' to run on jean zay server
     parser.add_argument(
+        "-r", "--results_folder", type=str, default="../results_debug/lorel"
+    )  # set to results folder
+    parser.add_argument(
         "-o", "--override", type=bool, default=False
     )  # set to True to overwrite results folder
     parser.add_argument(
@@ -247,6 +256,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "-g", "--guidance_weight", type=int, default=0
     )  # set to positive to use guidance
+    parser.add_argument(
+        "--save_and_sample_every",
+        type=int,
+        default=2500,
+    )  # set to number of steps to save and sample
+    parser.add_argument(
+        "-b", "--batch_size", type=int, default=16
+    )  # set to batch size for training
     args = parser.parse_args()
     if args.mode == "inference":
         assert args.checkpoint_num is not None
