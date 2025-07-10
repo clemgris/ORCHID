@@ -263,8 +263,8 @@ class ExpertDataset(Dataset):
             states = torch.Tensor(states)
             states = _pad_with_repetition(states, self.max_length - states.shape[0])
 
-            x_cond = states[0, ...]
-            x = states[1:, ...]
+            x_cond = states[0, ...].dtype(torch.float32)
+            x = states[1:, ...].dtype(torch.float32)
             x_cond = x_cond.squeeze(0)
             x = rearrange(x, "f c h w -> (f c) h w")
             task = language
@@ -477,14 +477,14 @@ class ExpertTrainDataset(Dataset):
         self,
         datasets_dir: str,
         diffuse_on: str,
-        skip_frames: int = 1,
+        num_subgoals: int = 1,
         seed: int = 0,
         transform=None,
         **kwargs,
     ):
         self.datasets_dir = datasets_dir
         self.diffuse_on = diffuse_on
-        self.skip_frames = skip_frames
+        self.num_subgoals = num_subgoals
 
         self.files = []
         for root, dirs, files in os.walk(datasets_dir):
@@ -509,7 +509,7 @@ class ExpertTrainDataset(Dataset):
         episodes_idx = np.linspace(
             start_idx,
             end_idx,
-            num_frames // self.skip_frames,
+            self.num_subgoals,
             dtype=int,
         )
         episode = samples[episodes_idx]
@@ -524,6 +524,10 @@ class ExpertTrainDataset(Dataset):
 
             x = rearrange(x, "f wh c -> f c wh")
             x = rearrange(x, "f c (w h) -> f c w h", w=16, h=16)
+        else:
+            # Normalise
+            x_cond = x_cond * 2 - 1
+            x = x * 2 - 1
 
         x = rearrange(x, "f c h w -> (f c) h w")
         task = data["language"].item()
@@ -600,15 +604,16 @@ class ExpertActionDataset(Dataset):
         actions = data["actions"][episodes_idx]
         end_image = data["states"][episodes_idx][-1]
         # Stack start and end images
-        start_end_images = np.stack([start_image, end_image])
-        state = np.zeros((2, 2))
+        state = np.zeros((1, 0))
         action_is_pad = np.zeros_like(actions, dtype=np.int32)
 
         res = {
-            "observation.image": torch.tensor(start_end_images),
+            "observation.image_static": torch.tensor(start_image)[None],
+            "observation.image_goal_static": torch.tensor(end_image)[None],
             "observation.state": torch.tensor(state),
             "action": torch.tensor(actions),
             "action_is_pad": torch.tensor(action_is_pad),
+            "text": data["language"].item(),
         }
 
         return res
