@@ -15,7 +15,6 @@ sys.path.append(
 import torch
 from goal_diffusion import GoalGaussianDiffusion, Trainer
 from omegaconf import DictConfig, OmegaConf
-from torch.utils.data import Subset
 from torchvision import utils
 from transformers import CLIPTextModel, CLIPTokenizer
 from unet import UnetMW as Unet
@@ -29,23 +28,20 @@ print(f"Total GPUs available: {torch.cuda.device_count()}")
 
 
 def main(args):
-    valid_n = 1
-
     results_folder = args.results_folder
 
     if args.server == "jz":
-        data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/TrajectoryDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_50k/data_with_dino_features"
-        num_data = 38225
+        data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/TrajectoryDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_50k"
     else:
-        data_path = "/home/grislain/SkillDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_1k/data_with_dino_features"
-        num_data = 100
+        data_path = (
+            "/home/grislain/SkillDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_1k"
+        )
 
     cfg = DictConfig(
         {
             "root": data_path,
             "num_subgoals": 5,
             "diffuse_on": "pixel",
-            "num_data": num_data,
             "train_num_steps": args.train_num_steps,
         },
     )
@@ -81,18 +77,15 @@ def main(args):
         #     skip_frames=cfg.skip_frames,
         # )
         train_set = ExpertTrainDataset(
-            cfg.root, num_subgoals=cfg.num_subgoals, diffuse_on=cfg.diffuse_on
+            os.path.join(cfg.root, "training", "data_with_dino_vit_features"),
+            num_subgoals=cfg.num_subgoals,
+            diffuse_on=cfg.diffuse_on,
         )
-        # Split train and valid
-        valid_inds = [i for i in range(0, len(train_set), len(train_set) // valid_n)][
-            :valid_n
-        ]
-        valid_set = Subset(train_set, valid_inds)
-
-        # Remove valide from train
-        all_inds = set(range(len(train_set)))
-        train_inds = list(all_inds - set(valid_inds))
-        train_set = Subset(train_set, train_inds)
+        valid_set = ExpertTrainDataset(
+            os.path.join(cfg.root, "validation", "data_with_dino_vit_features"),
+            num_subgoals=cfg.num_subgoals,
+            diffuse_on=cfg.diffuse_on,
+        )
 
         print("Train data:", len(train_set))
         print("Valid data:", len(valid_set))
@@ -159,7 +152,7 @@ def main(args):
         train_batch_size=args.batch_size,
         valid_batch_size=1,
         gradient_accumulate_every=1,
-        num_samples=valid_n,
+        num_samples=1,
         results_folder=results_folder,
         precision="fp16",
         amp=True,

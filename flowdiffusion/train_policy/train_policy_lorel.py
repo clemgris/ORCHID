@@ -41,18 +41,15 @@ def main(args):
     results_folder = args.results_folder
 
     if args.server == "jz":
-        data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/TrajectoryDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_50k/data_with_dino_vit_features"
-        num_data = 38225
+        data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/TrajectoryDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_50k/dec_24_sawyer_50k/training/data_with_dino_vit_features"
     else:
         data_path = "/home/grislain/SkillDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_1k/training/data_with_dino_vit_features"
-        num_data = 100
 
     cfg = DictConfig(
         {
             "root": data_path,
             "skip_frames": 4,
             "diffuse_on": "pixel",
-            "num_data": num_data,
             "save_every": args.save_every,
         },
     )
