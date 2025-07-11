@@ -483,6 +483,8 @@ class ExpertTrainDataset(Dataset):
         **kwargs,
     ):
         self.datasets_dir = datasets_dir
+        assert os.path.isdir(datasets_dir), f"{datasets_dir} is not a valid directory"
+
         self.diffuse_on = diffuse_on
         self.num_subgoals = num_subgoals
 
@@ -509,7 +511,7 @@ class ExpertTrainDataset(Dataset):
         episodes_idx = np.linspace(
             start_idx,
             end_idx,
-            self.num_subgoals,
+            self.num_subgoals + 1,
             dtype=int,
         )
         episode = samples[episodes_idx]

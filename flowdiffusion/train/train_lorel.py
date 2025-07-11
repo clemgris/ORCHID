@@ -46,7 +46,7 @@ def main(args):
         },
     )
 
-    sample_per_seq = cfg.num_subgoals
+    sample_per_seq = cfg.num_subgoals + 1
 
     if cfg.diffuse_on == "dino_feat":
         target_size = (16, 16)
@@ -135,7 +135,7 @@ def main(args):
         beta_schedule="cosine",
         min_snr_loss_weight=True,
         auto_normalize=False,  # True,
-        num_subgoals=cfg.num_subgoals - 1,
+        num_subgoals=cfg.num_subgoals,
     )
 
     trainer = Trainer(
