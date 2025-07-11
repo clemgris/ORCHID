@@ -40,13 +40,17 @@ def main(args):
         data_path = "/home/grislain/SkillDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_1k/data_with_dino_features"
         num_data = 100
 
+    if args.data_path is not None:
+        data_path = args.data_path
+        num_data = args.num_data
+
     cfg = DictConfig(
         {
             "root": data_path,
             "num_subgoals": 5,
             "diffuse_on": "pixel",
             "num_data": num_data,
-            "train_num_steps": 100000,
+            "train_num_steps": args.train_num_steps,
         },
     )
 
@@ -264,6 +268,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "-b", "--batch_size", type=int, default=16
     )  # set to batch size for training
+    parser.add_argument(
+        "--train_num_steps",
+        type=int,
+        default=100000,
+    )  # set to number of training steps
     args = parser.parse_args()
     if args.mode == "inference":
         assert args.checkpoint_num is not None
