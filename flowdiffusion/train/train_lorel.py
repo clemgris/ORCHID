@@ -40,10 +40,6 @@ def main(args):
         data_path = "/home/grislain/SkillDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_1k/data_with_dino_features"
         num_data = 100
 
-    if args.data_path is not None:
-        data_path = args.data_path
-        num_data = args.num_data
-
     cfg = DictConfig(
         {
             "root": data_path,
