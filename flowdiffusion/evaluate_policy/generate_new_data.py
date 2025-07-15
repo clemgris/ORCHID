@@ -24,7 +24,7 @@ sys.path.extend(
 
 # === Local Project Imports ===
 from methods.generate_data import generate_new_data
-from model.hierarchical_model import HierarchicalModel
+from model.hierarchical_model_calvin import HierarchicalModel
 
 # === CALVIN Imports ===
 from calvin.calvin_env.calvin_env.envs.play_table_env import get_env

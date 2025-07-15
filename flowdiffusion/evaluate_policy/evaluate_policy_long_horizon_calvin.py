@@ -23,7 +23,7 @@ sys.path.extend(
 
 # === Local Project Imports ===
 from methods.evaluate_policy import evaluate_policy
-from model.hierarchical_model import HierarchicalModel
+from model.hierarchical_model_calvin import HierarchicalModel
 from utils.transform_feat import update_feat_transform
 
 # === CALVIN Imports ===
