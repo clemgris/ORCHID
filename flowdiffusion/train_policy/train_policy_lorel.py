@@ -71,6 +71,8 @@ def main(args):
         cfg.root, skip_frames=cfg.skip_frames, diffuse_on=cfg.diffuse_on
     )
 
+    print(f"Number of training samples: {len(train_set)}")
+
     stats_path = os.path.join(data_path, "../dataset_stats.pkl")
     train_stats = pickle.load(open(stats_path, "rb"))
 
