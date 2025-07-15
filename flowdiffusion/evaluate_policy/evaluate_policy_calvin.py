@@ -19,7 +19,7 @@ sys.path.extend(
 )
 
 from methods.evaluate_policy import evaluate_policy_singlestep
-from model.hierarchical_model import HierarchicalModel
+from model.hierarchical_model_calvin import HierarchicalModel
 from utils.transform_feat import update_feat_transform
 
 from calvin.calvin_models.calvin_agent.datasets.calvin_data_module import (
@@ -177,7 +177,9 @@ if __name__ == "__main__":
         policy_data_config.datamodule.lang_dataset.obs = "pixel"
         del policy_data_config.datamodule.lang_dataset.diffuse_on
 
-    if "diffuse_on" in high_level_data_config.datamodule.lang_dataset:
+    if high_level_data_config != {} and (
+        "diffuse_on" in high_level_data_config.datamodule.lang_dataset
+    ):
         high_level_data_config.datamodule.lang_dataset.goal = (
             high_level_data_config.datamodule.lang_dataset.diffuse_on
         )
