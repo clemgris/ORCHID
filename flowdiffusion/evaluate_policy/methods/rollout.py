@@ -137,7 +137,7 @@ def rollout(env, model, task_oracle, subtask, val_annotations, debug_path=None):
     if debug_path:
         # Create folder for this failed episode
         os.makedirs(debug_path + "/failures/", exist_ok=True)
-        failure_idx = len(debug_path + "/failures/")
+        failure_idx = len(os.listdir(debug_path + "/failures/"))
         failed_episode_path = os.path.join(
             debug_path, f"failures/failed_{subtask.replace(' ', '_')}_{failure_idx}"
         )
