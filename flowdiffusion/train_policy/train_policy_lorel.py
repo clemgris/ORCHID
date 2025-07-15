@@ -63,9 +63,6 @@ def main(args):
             )
     results_folder.mkdir(exist_ok=True, parents=True)
 
-    with open(os.path.join(results_folder, "data_config.yaml"), "w") as file:
-        file.write(OmegaConf.to_yaml(cfg))
-
     # Training set
     train_set = ExpertActionDataset(
         cfg.root, skip_frames=cfg.skip_frames, diffuse_on=cfg.diffuse_on
@@ -170,7 +167,7 @@ def main(args):
             },
             "n_action_steps": cfg.skip_frames,
             "input_normalization_modes": {},
-            "output_normalization_modes": {"action": "min_max"},
+            "output_normalization_modes": {},  # "action": "min_max"},
             "crop_shape": None,
             "vision_backbone": "resnet18",
             "use_text": args.use_text,
@@ -206,10 +203,38 @@ def main(args):
     cfg["diff_cfg"] = diff_cfg
 
     # Save cfg
-    with open(os.path.join(results_folder, "data_config.yaml"), "w") as file:
-        file.write(OmegaConf.to_yaml(cfg))
+    if args.checkpoint_num is not None:
+        # Load checkpoint config which is a yaml
+        checkpoint_cfg_path = os.path.join(results_folder, "data_config.yaml")
+        checkpoint_cfg = OmegaConf.load(checkpoint_cfg_path)
 
+        # Check if cfg and checkpoint_cfg align
+        mismatching_keys = []
+        allowed_mismatch = ["training_steps"]  # Allow mismatch for training steps
+        for key in cfg.keys():
+            if key not in checkpoint_cfg:
+                mismatching_keys.append(key)
+                print(f"Key {key} not in checkpoint config.")
+            elif cfg[key] != checkpoint_cfg[key]:
+                mismatching_keys.append(key)
+                print(
+                    f"Key {key} has different value in checkpoint config {checkpoint_cfg[key]} != {cfg[key]}"
+                )
+        assert all(key in allowed_mismatch for key in mismatching_keys), (
+            f"Keys {mismatching_keys} are not in the allowed mismatch list {allowed_mismatch}"
+        )
+    else:
+        with open(os.path.join(results_folder, "data_config.yaml"), "w") as file:
+            file.write(OmegaConf.to_yaml(cfg))
     policy = DiffusionPolicy(diff_cfg, dataset_stats=train_stats)
+
+    if args.checkpoint_num is not None:
+        checkpoint_path = os.path.join(
+            results_folder, f"model-{args.checkpoint_num}.pt"
+        )
+        print(f"Loading checkpoint from {checkpoint_path}")
+        policy.load_state_dict(torch.load(checkpoint_path))
+
     policy.train()
     policy.to(device)
 
@@ -337,5 +362,10 @@ if __name__ == "__main__":
         type=int,
         default=100,
     )  # set to save the model every n steps
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=32,
+    )  # set to batch size for training
     args = parser.parse_args()
     main(args)
