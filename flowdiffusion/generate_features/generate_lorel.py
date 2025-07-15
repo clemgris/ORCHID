@@ -179,7 +179,7 @@ def main(args):
 
     for ii, data in tqdm(
         enumerate(valid_set),
-        desc=f"Generate {args.features} features of training data",
+        desc=f"Generate {args.features} features of validation data",
         total=len(valid_set),
     ):
         traj = data.copy()
