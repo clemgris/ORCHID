@@ -602,9 +602,10 @@ class ExpertActionDataset(Dataset):
         data = np.load(self.files[episodes_idx])
         episodes_idx = np.arange(frame_idx, frame_idx + self.skip_frames)
 
-        start_image = data["states"][episodes_idx][0]
+        start_image = data["states"][episodes_idx][0]  # * 2 - 1
         actions = data["actions"][episodes_idx]
-        end_image = data["states"][episodes_idx][-1]
+        actions[:, 3] = 0  ### Rotation always 0
+        end_image = data["states"][episodes_idx][-1]  # * 2 - 1
         # Stack start and end images
         state = np.zeros((1, 0))
         action_is_pad = np.zeros_like(actions, dtype=np.int32)
