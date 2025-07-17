@@ -138,10 +138,18 @@ def rollout(env, task, model, debug_path):
     subgoals = []
     im = env.reset()
     im = im[0]
+
+    ## DEBUG
+    path = "/home/grislain/SkillDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_1k/training/data_with_dino_vit_features/data_0.npz"
+    episode = np.load(path, allow_pickle=True)
+    ## DEBUG
+    breakpoint()
+
     while not done:
         # Reset environment
         st0 = env.unwrapped.data.qpos[:].copy()
         action = model.step(im, task).cpu().numpy()
+        action = episode["actions"][step]  # DEBUG
 
         obs_list.append(torch.Tensor(im).permute(2, 0, 1))
         if args.save_failures and hasattr(model, "sub_goals"):
@@ -331,10 +339,10 @@ if __name__ == "__main__":
     image_transforms_dict = torchvision.transforms.Compose(
         [
             torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(
-                mean=[0.5, 0.5, 0.5],
-                std=[0.5, 0.5, 0.5],
-            ),
+            # torchvision.transforms.Normalize(
+            #     mean=[0.5, 0.5, 0.5],
+            #     std=[0.5, 0.5, 0.5],
+            # ),
         ]
     )
 
