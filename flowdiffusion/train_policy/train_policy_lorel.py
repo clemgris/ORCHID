@@ -4,6 +4,7 @@ import pickle
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
@@ -43,7 +44,7 @@ def main(args):
     if args.server == "jz":
         data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/TrajectoryDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_50k/dec_24_sawyer_50k/training/data_with_dino_vit_features"
     else:
-        data_path = "/home/grislain/SkillDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_1k/training/data_with_dino_vit_features"
+        data_path = "/home/grislain/SkillDiffuser/lorel/data/jul_26_sawyer_1k/jul_26_sawyer_1k/training/data_with_dino_vit_features"
 
     cfg = DictConfig(
         {
@@ -51,6 +52,7 @@ def main(args):
             "skip_frames": 4,
             "diffuse_on": "pixel",
             "save_every": args.save_every,
+            "evaluate_every": 5000,  # Evaluate every 1000 steps
         },
     )
 
@@ -67,8 +69,15 @@ def main(args):
     train_set = ExpertActionDataset(
         cfg.root, skip_frames=cfg.skip_frames, diffuse_on=cfg.diffuse_on
     )
+    # Validation test
+    val_set = ExpertActionDataset(
+        cfg.root.replace("training", "validation"),
+        skip_frames=cfg.skip_frames,
+        diffuse_on=cfg.diffuse_on,
+    )
 
     print(f"Number of training samples: {len(train_set)}")
+    print(f"Number of validation samples: {len(val_set)}")
 
     stats_path = os.path.join(data_path, "../dataset_stats.pkl")
     train_stats = pickle.load(open(stats_path, "rb"))
@@ -154,6 +163,17 @@ def main(args):
         f"Number of parameters in text encoder {text_pretrained_model}: {text_encoder_num_params / 1e6:.2f}M"
     )
 
+    if cfg.skip_frames == 8:
+        down_dims = (512, 1024, 2048)
+    elif cfg.skip_frames == 4:
+        down_dims = (512, 1024)
+    elif cfg.skip_frames == 2 or cfg.skip_frames == 1:
+        down_dims = (512,)
+    else:
+        raise ValueError(
+            f"Unsupported skip_frames value {cfg.skip_frames}. Supported values are 2, 4, or 8."
+        )
+
     # Diffusion config
     diff_cfg = DictConfig(
         {
@@ -173,7 +193,7 @@ def main(args):
             "use_text": args.use_text,
             "text_embed_dim": text_embed_dim,
             "final_text_embed_dim": 64,
-            "down_dims": (512, 1024),
+            "down_dims": down_dims,
         }
     )
 
@@ -210,7 +230,10 @@ def main(args):
 
         # Check if cfg and checkpoint_cfg align
         mismatching_keys = []
-        allowed_mismatch = ["training_steps"]  # Allow mismatch for training steps
+        allowed_mismatch = [
+            "training_steps",
+            "evaluate_every",
+        ]  # Allow mismatch for training steps
         for key in cfg.keys():
             if key not in checkpoint_cfg:
                 mismatching_keys.append(key)
@@ -249,6 +272,14 @@ def main(args):
         pin_memory=device != torch.device("cpu"),
         drop_last=True,
     )
+    val_dataloader = torch.utils.data.DataLoader(
+        val_set,
+        num_workers=4 if args.server == "jz" else 1,
+        batch_size=args.batch_size if hasattr(args, "batch_size") else 32,
+        shuffle=False,
+        pin_memory=device != torch.device("cpu"),
+        drop_last=False,
+    )
 
     # Run training loop.
     done = False
@@ -257,6 +288,9 @@ def main(args):
     )
     print(f"Starting training at step {step}")
     pbar = tqdm(total=training_steps, initial=step, desc="Training")
+
+    train_loss_path = os.path.join(results_folder, "train_loss.txt")
+    val_loss_path = os.path.join(results_folder, "val_loss.txt")
 
     while not done:
         for batch in dataloader:
@@ -283,7 +317,9 @@ def main(args):
             optimizer.zero_grad()
 
             if step % log_freq == 0:
-                print(f"step: {step} loss: {loss.item():.3f}")
+                # print(f"step: {step} loss: {loss.item():.3f}")
+                with open(train_loss_path, "a") as f:
+                    f.write(f"{step} {loss.item()}\n")
 
             if step % cfg.save_every == 0:
                 # Delete previous checkpoints
@@ -299,6 +335,34 @@ def main(args):
                         results_folder, f"model-{step // cfg.save_every}.pt"
                     )
                     torch.save(policy.state_dict(), saving_path)
+            if step % cfg.evaluate_every == 0:
+                all_val_loss = []
+                for val_batch in tqdm(val_dataloader, desc="Validation"):
+                    if args.use_text:
+                        val_batch_text_ids = tokenizer(
+                            val_batch["text"],
+                            return_tensors="pt",
+                            padding=True,
+                            truncation=True,
+                            max_length=128,
+                        ).to(device)
+                        val_batch["text"] = text_encoder(
+                            **val_batch_text_ids
+                        ).last_hidden_state
+                    else:
+                        del val_batch["text"]
+                    val_batch = {
+                        k: v.to(device, non_blocking=True, dtype=torch.float32)
+                        for k, v in val_batch.items()
+                    }
+                    with torch.no_grad():
+                        output_dict = policy.forward(val_batch)
+                        val_loss = output_dict["loss"]
+                        all_val_loss.append(val_loss.item())
+                # print(f"Validation loss at step {step}: {all_val_loss.mean():.3f}")
+                with open(val_loss_path, "a") as f:
+                    f.write(f"{step} {np.mean(all_val_loss)}\n")
+
             pbar.set_postfix(loss=loss.item())
             step += 1
             pbar.update(1)
