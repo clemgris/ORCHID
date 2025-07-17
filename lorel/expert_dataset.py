@@ -583,7 +583,7 @@ class ExpertActionDataset(Dataset):
         self.diffuse_on = diffuse_on
         self.skip_frames = skip_frames
 
-        self.num_frames = 20 - self.skip_frames + 1
+        self.num_frames = 20 - self.skip_frames
 
         self.files = []
         for root, dirs, files in os.walk(datasets_dir):
@@ -600,12 +600,16 @@ class ExpertActionDataset(Dataset):
         frame_idx = idx % (self.num_frames)
 
         data = np.load(self.files[episodes_idx])
-        episodes_idx = np.arange(frame_idx, frame_idx + self.skip_frames)
+        frames_idx = np.arange(frame_idx, frame_idx + self.skip_frames + 1)
 
-        start_image = data["states"][episodes_idx][0]  # * 2 - 1
-        actions = data["actions"][episodes_idx]
+        actions = data["actions"][frames_idx][:-1]
         actions[:, 3] = 0  ### Rotation always 0
-        end_image = data["states"][episodes_idx][-1]  # * 2 - 1
+
+        # Temporal smoothing of actions
+        actions = actions.mean(axis=0, keepdims=True) * np.ones_like(actions)
+
+        start_image = data["states"][frames_idx][0]  # * 2 - 1
+        end_image = data["states"][frames_idx][-1]  # * 2 - 1
         # Stack start and end images
         state = np.zeros((1, 0))
         action_is_pad = np.zeros_like(actions, dtype=np.int32)
@@ -613,6 +617,9 @@ class ExpertActionDataset(Dataset):
         res = {
             "observation.image_static": torch.tensor(start_image)[None],
             "observation.image_goal_static": torch.tensor(end_image)[None],
+            # "observation.image_pos_goal_static": torch.tensor(pos_end_image)[
+            #     None
+            # ],  # DEBUG
             "observation.state": torch.tensor(state),
             "action": torch.tensor(actions),
             "action_is_pad": torch.tensor(action_is_pad),
