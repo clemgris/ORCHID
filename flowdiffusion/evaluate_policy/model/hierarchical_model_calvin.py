@@ -468,7 +468,6 @@ class HierarchicalModel(CalvinBaseModel):
                     "b (f c) w h -> b f c w h",
                     c=self.high_level_channels,
                 )[:, :, None, ...]
-                breakpoint()
 
         if self.steps % self.sample_action_every == 0:
             # Select subgoal
