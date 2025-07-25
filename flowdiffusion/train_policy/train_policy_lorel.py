@@ -194,6 +194,7 @@ def main(args):
             "text_embed_dim": text_embed_dim,
             "final_text_embed_dim": 64,
             "down_dims": down_dims,
+            "prediction_type": args.diffusion_objective,
         }
     )
 
@@ -228,11 +229,19 @@ def main(args):
         checkpoint_cfg_path = os.path.join(results_folder, "data_config.yaml")
         checkpoint_cfg = OmegaConf.load(checkpoint_cfg_path)
 
+        ## DEBUG
+        checkpoint_cfg.root = data_path
+        checkpoint_cfg.stats_path = (
+            "/home/grislain/AVDC/calvin/dataset/task_D_D/training/dataset_stats.pkl"
+        )
+        ## DEBUG
+
         # Check if cfg and checkpoint_cfg align
         mismatching_keys = []
         allowed_mismatch = [
             "training_steps",
             "evaluate_every",
+            "stats_path",  # DEBUG
         ]  # Allow mismatch for training steps
         for key in cfg.keys():
             if key not in checkpoint_cfg:
@@ -431,5 +440,11 @@ if __name__ == "__main__":
         type=int,
         default=32,
     )  # set to batch size for training
+    parser.add_argument(
+        "--diffusion_objective",
+        default="epsilon",
+        type=str,
+        choices=["epsilon", "sample"],
+    )
     args = parser.parse_args()
     main(args)
