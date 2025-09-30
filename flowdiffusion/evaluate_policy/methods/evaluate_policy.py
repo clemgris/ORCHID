@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 NUM_SEQUENCES = 1000
+LENGTH_REF_TRAJ = 64
 
 
 def evaluate_policy_singlestep(model, env, dataset, args, conf_dir):
@@ -53,6 +54,7 @@ def evaluate_policy_singlestep(model, env, dataset, args, conf_dir):
 
     results = Counter()
     tot_tasks = Counter()
+    lengths = {}
 
     for episode in dataset:
         task = episode["task"]
@@ -61,18 +63,22 @@ def evaluate_policy_singlestep(model, env, dataset, args, conf_dir):
         )
         results[task] += success
         tot_tasks[task] += 1
-        print(f"{task}: {results[task]} / {tot_tasks[task]} ({length})")
-
+        if tot_tasks[task] == 1:
+            lengths[task] = [length]
+        else:
+            lengths[task].append(length)
+        print(f"{task}: {results[task]} / {tot_tasks[task]} ({length}, {length//LENGTH_REF_TRAJ+1})")
+        break
     print("\nResults\n" + "-" * 60)
     for task in results:
-        print(f"{task}: {results[task]} / {tot_tasks[task]}")
+        print(f"{task}: {results[task]} / {tot_tasks[task]} (sr {results[task] / tot_tasks[task]} length {np.mean(lengths[task])} #replan {np.mean(np.array(lengths[task])//LENGTH_REF_TRAJ+1)})")
 
     print(f"SR: {sum(results.values()) / sum(tot_tasks.values()) * 100:.1f}%")
 
     # Save results
     with open(os.path.join(args.eval_folder, f"results_{args.test_on}.txt"), "w") as f:
         for task in results:
-            f.write(f"{task}: {results[task]} / {tot_tasks[task]}\n")
+            f.write(f"{task}: {results[task]} / {tot_tasks[task]} (sr {results[task] / tot_tasks[task]} length {np.mean(lengths[task])} #replan {np.mean(np.array(lengths[task])//LENGTH_REF_TRAJ+1)})\n")
         f.write(f"SR: {sum(results.values()) / sum(tot_tasks.values()) * 100:.1f}%\n")
 
 
