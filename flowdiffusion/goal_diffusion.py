@@ -52,6 +52,39 @@ def tensors2vectors(tensors):
         torch.from_numpy(np.array([tensor2vector(tensor) for tensor in tensors])) / 255
     )
 
+def k_swaps_perm(n, k, p):
+    idx = torch.arange(n)
+
+    if torch.rand(1) < p:
+        for _ in range(k):
+            i, j = np.random.choice(n, size=2, replace=False)
+            idx[i] = j
+            idx[j] = i
+
+    return idx
+
+def temporal_shuffle_batch(batch, max_k, p):
+    """
+    Apply independent temporal perturbations to each video in the batch.
+
+    Args:
+        batch (torch.Tensor): [B, T, C, H, W]
+        max_k (int): maximum number of swaps
+        p (float): probability of applying swaps per sample
+
+    Returns:
+        torch.Tensor: perturbed batch, same shape
+    """
+    B, T, _, _, _ = batch.shape
+    out = torch.empty_like(batch)
+
+    for b in range(B):
+        # pick a random number of swaps between 1 and max_k
+        k = torch.randint(1, max_k + 1, (1,)).item()
+        idx = k_swaps_perm(T, k=k, p=p)
+        out[b] = batch[b, idx]
+
+    return out
 
 def exists(x):
     return x is not None
@@ -392,6 +425,8 @@ class GoalGaussianDiffusion(nn.Module):
         min_snr_gamma=5,
         num_subgoals=8,
         temporal_loss_weight=0.1,
+        prob_temp_swaps=0.0,
+        num_swaps=1,
     ):
         super().__init__()
         # assert not (type(self) == GoalGaussianDiffusion and model.channels != model.out_dim)
@@ -431,6 +466,9 @@ class GoalGaussianDiffusion(nn.Module):
         self.loss_type = loss_type
 
         self.temporal_loss_weight = temporal_loss_weight
+
+        self.prob_temp_swaps = prob_temp_swaps
+        self.num_swaps = num_swaps
 
         # sampling related parameters
 
@@ -809,11 +847,23 @@ class GoalGaussianDiffusion(nn.Module):
         noise = default(noise, lambda: torch.randn_like(x_start))
 
         # noise sample
-
         x = self.q_sample(x_start=x_start, t=t, noise=noise)
 
+        # Preprocess temp swaps
+        x_prepost = rearrange(
+            x,
+            "b (t c) h w -> b t c h w",
+            t=self.num_subgoals,
+            c=self.channels // self.num_subgoals,
+        )
+        x_prepost = temporal_shuffle_batch(x_prepost, self.num_swaps, self.prob_temp_swaps)
+        x_prepost = rearrange(
+            x_prepost,
+            "b t c h w -> b (t c) h w",
+        )
+
         # predict and take gradient step
-        model_out = self.model(torch.cat([x, x_cond], dim=1), t, task_embed)
+        model_out = self.model(torch.cat([x_prepost, x_cond], dim=1), t, task_embed)
         if self.objective == "pred_noise":
             target = noise
             pred_x0 = self.predict_start_from_noise(x, t, model_out)
@@ -829,7 +879,10 @@ class GoalGaussianDiffusion(nn.Module):
         loss = self.loss_fn(model_out, target, reduction="none")
         loss = reduce(loss, "b ... -> b (...)", "mean")
         loss = loss * extract(self.loss_weight, t, loss.shape)
+
+        # Regularization to ensure temporal consistency between subgoals
         loss_reg = self.temporal_loss_weight * self.temporal_loss(pred_x0, x_start)
+
         return loss.mean() + loss_reg.mean()
 
     def forward(self, img, img_cond, task_embed):

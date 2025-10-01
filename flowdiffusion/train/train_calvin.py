@@ -313,6 +313,8 @@ def main(args):
         min_snr_loss_weight=True,
         auto_normalize=False,
         temporal_loss_weight=args.temporal_loss_weight,
+        prob_temp_swaps=args.prob_temp_swaps,
+        num_swaps=args.num_swaps,
     )
 
     trainer = Trainer(
@@ -628,6 +630,16 @@ if __name__ == "__main__":
         type=float,
         default=0.0,
     )  # set to temporal loss weight
+    parser.add_argument(
+        "--prob_temp_swaps",
+        type=float,
+        default=0.0,
+    )  # set to probability of temporal swaps
+    parser.add_argument(
+        "--num_swaps",
+        type=int,
+        default=1,
+    )  # set to number of swaps for data aug in training
     parser.add_argument(
         "--use_filtered_data",
         action="store_true",
