@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 NUM_SEQUENCES = 1000
-LENGTH_REF_TRAJ = 64
+LENGTH_REF_TRAJ = 65
 
 
 def evaluate_policy_singlestep(model, env, dataset, args, conf_dir):
@@ -68,7 +68,7 @@ def evaluate_policy_singlestep(model, env, dataset, args, conf_dir):
         else:
             lengths[task].append(length)
         print(f"{task}: {results[task]} / {tot_tasks[task]} ({length}, {length//LENGTH_REF_TRAJ+1})")
-        break
+        
     print("\nResults\n" + "-" * 60)
     for task in results:
         print(f"{task}: {results[task]} / {tot_tasks[task]} (sr {results[task] / tot_tasks[task]} length {np.mean(lengths[task])} #replan {np.mean(np.array(lengths[task])//LENGTH_REF_TRAJ+1)})")
