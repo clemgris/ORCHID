@@ -44,6 +44,11 @@ from lerobot.common.policies.diffusion.modeling_diffusion import (
     DiffusionPolicy,
 )
 
+from lerobot.common.policies.act.modeling_act import (
+    ACTConfig,
+    ACTPolicy,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,6 +79,7 @@ class HierarchicalModel(CalvinBaseModel):
         self.ref_traj_length = 64
         self.guidance_weight = 3
         self.sample_subgoals_every = 8
+
         self.use_oracle_subgoals = cfg.high_level.use_oracle_subgoals
         self.use_text = self.cfg.policy.diff_cfg.get("use_text", False)
 
@@ -116,9 +122,14 @@ class HierarchicalModel(CalvinBaseModel):
         }
 
     def _init_policy(self, cfg):
-        self.policy = DiffusionPolicy(
-            DiffusionConfig(**cfg.policy.diff_cfg), dataset_stats=self.stats
-        )
+        if cfg.policy.model == 'diffusion':
+            self.policy = DiffusionPolicy(
+                DiffusionConfig(**cfg.policy.diff_cfg), dataset_stats=self.stats
+            )
+        elif cfg.policy.model == 'act':
+            self.policy = ACTPolicy(
+                ACTConfig(**cfg.policy.diff_cfg), dataset_stats=self.stats
+            )
         policy_checkpoint_path = (
             cfg.policy.results_folder + f"/model-{cfg.policy.checkpoint_num}.pt"
         )
@@ -511,9 +522,14 @@ class HierarchicalModel(CalvinBaseModel):
                 obs_goal["text"] = encoded_text
             # Predict action
             with torch.inference_mode():
-                self.actions = (
+                if self.cfg.policy.model == 'diffusion':
+                    self.actions = (
                     self.policy.diffusion.generate_actions(obs_goal).cpu().detach()[0]
                 )
+                elif self.cfg.policy.model == 'act':
+                    self.actions = self.policy.model({k: v[0] for k,v in obs_goal.items()})[0][0].cpu().detach()
+                else:
+                    raise ValueError(f"Policy model {self.cfg.policy.model} not supported")
 
             # Unormalise actions
             self.actions = self._unorm_action_fonct(self.actions)

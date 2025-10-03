@@ -116,6 +116,14 @@ if __name__ == "__main__":
         help="Use filtered data (expert sucesses) for evaluation.",
     )
 
+    parser.add_argument(
+        "--policy_model",
+        type=str,
+        default="diffusion",
+        choices=["diffusion", "act"],
+        help="Policy model to use.",
+    )
+
     parser.add_argument("--device", default=0, type=int, help="CUDA device")
     args = parser.parse_args()
     args.save_failures = args.debug_path is not None
@@ -188,6 +196,7 @@ if __name__ == "__main__":
     config = DictConfig(
         {
             "policy": {
+                "model": args.policy_model,
                 "checkpoint_num": args.policy_checkpoint_num,
                 "results_folder": args.policy_results_folder,
                 **policy_data_config,
