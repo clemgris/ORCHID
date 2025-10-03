@@ -1048,7 +1048,7 @@ class DiskActionDataset(BaseDataset):
 
         # Actions
         actions = sequence["actions"][:-1]
-        action_is_pad = torch.zeros_like(actions)
+        action_is_pad = torch.zeros_like(actions).sum(dim=-1).bool()
 
         # Compose result
         res = {
