@@ -54,37 +54,25 @@ def tensors2vectors(tensors):
 
 def k_swaps_perm(n, k, p):
     idx = torch.arange(n)
-
     if torch.rand(1) < p:
         for _ in range(k):
-            i, j = np.random.choice(n, size=2, replace=False)
-            idx[i] = j
-            idx[j] = i
-
+            i, j = torch.randperm(n)[:2]
+            idx[i], idx[j] = idx[j].clone(), idx[i].clone()
     return idx
 
 def temporal_shuffle_batch(batch, max_k, p):
     """
-    Apply independent temporal perturbations to each video in the batch.
-
-    Args:
-        batch (torch.Tensor): [B, T, C, H, W]
-        max_k (int): maximum number of swaps
-        p (float): probability of applying swaps per sample
-
-    Returns:
-        torch.Tensor: perturbed batch, same shape
+    batch: [B, T, C, H, W]
     """
     B, T, _, _, _ = batch.shape
     out = torch.empty_like(batch)
-
     for b in range(B):
-        # pick a random number of swaps between 1 and max_k
         k = torch.randint(1, max_k + 1, (1,)).item()
-        idx = k_swaps_perm(T, k=k, p=p)
+        idx = k_swaps_perm(T, k, p)
+        print(idx)
         out[b] = batch[b, idx]
-
     return out
+
 
 def exists(x):
     return x is not None
@@ -880,10 +868,20 @@ class GoalGaussianDiffusion(nn.Module):
         loss = reduce(loss, "b ... -> b (...)", "mean")
         loss = loss * extract(self.loss_weight, t, loss.shape)
 
-        # Regularization to ensure temporal consistency between subgoals
-        loss_reg = self.temporal_loss_weight * self.temporal_loss(pred_x0, x_start)
 
-        return loss.mean() + loss_reg.mean()
+        if torch.isnan(loss).any():
+            raise ValueError("NaN in diffusion loss")
+
+        if self.temporal_loss_weight == 0.0:
+            return loss.mean()
+        else:
+            # Regularization to ensure temporal consistency between subgoals
+            loss_reg = self.temporal_loss_weight * self.temporal_loss(pred_x0, x_start)
+
+            if torch.isnan(loss_reg).any():
+                raise ValueError("NaN in diffusion temporal consistency loss")
+
+            return loss.mean() + loss_reg.mean()
 
     def forward(self, img, img_cond, task_embed):
         (
