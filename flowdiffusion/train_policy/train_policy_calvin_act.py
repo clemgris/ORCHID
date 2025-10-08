@@ -1,4 +1,5 @@
 import argparse
+import glob
 import os
 import sys
 from pathlib import Path
@@ -16,6 +17,8 @@ sys.path.append(
 )
 
 import torch
+from lerobot.common.policies.act.configuration_act import ACTConfig
+from lerobot.common.policies.act.modeling_act import ACTPolicy
 from omegaconf import DictConfig, OmegaConf
 from transformers import (
     AutoTokenizer,
@@ -24,10 +27,8 @@ from transformers import (
     SiglipTextModel,
     SiglipTokenizer,
     T5EncoderModel,
+    get_cosine_schedule_with_warmup,
 )
-
-from lerobot.common.policies.act.configuration_act import ACTConfig
-from lerobot.common.policies.act.modeling_act import ACTPolicy
 
 sys.path.append(
     os.path.join(
@@ -244,7 +245,7 @@ def main(args):
             },
             "input_normalization_modes": {},
             "output_normalization_modes": {"action": "min_max"},
-            "vision_backbone": "resnet18"
+            "vision_backbone": "resnet18",
         }
     )
 
@@ -326,6 +327,11 @@ def main(args):
     print("Number of training parameters:", sum(p.numel() for p in policy.parameters()))
 
     optimizer = torch.optim.Adam(policy.parameters(), lr=1e-4)
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=2000,
+        num_training_steps=training_steps,
+    )
 
     # Create dataloader for offline training.
     dataloader = torch.utils.data.DataLoader(
@@ -358,6 +364,8 @@ def main(args):
     print(f"Starting training at step {step}")
     pbar = tqdm(total=training_steps, initial=step, desc="Training")
 
+    best_val_loss = 100  # Set to a large value at the beginning
+
     while not done:
         for batch in dataloader:
             batch_text = batch.get("text", None)
@@ -374,17 +382,26 @@ def main(args):
                 del batch["text"]
             batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
             output_dict = policy.forward(batch)
+
             loss = output_dict["loss"]
             loss.backward()
+
             optimizer.step()
+            scheduler.step()
+
+            # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
             optimizer.zero_grad()
 
             # Logging
             if step % log_freq == 0:
                 # print(f"Step: {step} | Train loss: {loss.item():.3f}")
                 # Write the training loss to a file
+                current_lr = scheduler.get_last_lr()[0]
                 with open(os.path.join(results_folder, "train_loss.txt"), "a") as f:
-                    f.write(f"Step {step} | Train loss {loss.item():.3f}\n")
+                    f.write(
+                        f"Step {step} | Train loss {loss.item():.3f} | LR {current_lr:.3e}\n"
+                    )
 
             # Evaluation
             if step % eval_freq == 0:
@@ -392,7 +409,9 @@ def main(args):
                 val_loss = 0.0
                 val_steps = 0
                 with torch.no_grad():
-                    for val_batch in tqdm(val_dataloader, desc='Validation', leave=False):
+                    for val_batch in tqdm(
+                        val_dataloader, desc="Validation", leave=False
+                    ):
                         batch_text = val_batch.get("text", None)
                         if args.use_text:
                             batch_text_ids = tokenizer(
@@ -402,10 +421,15 @@ def main(args):
                                 truncation=True,
                                 max_length=128,
                             ).to(device)
-                            val_batch["text"] = text_encoder(**batch_text_ids).last_hidden_state
+                            val_batch["text"] = text_encoder(
+                                **batch_text_ids
+                            ).last_hidden_state
                         else:
                             del val_batch["text"]
-                        val_batch = {k: v.to(device, non_blocking=True) for k, v in val_batch.items()}
+                        val_batch = {
+                            k: v.to(device, non_blocking=True)
+                            for k, v in val_batch.items()
+                        }
                         output_dict = policy.forward(val_batch)
                         val_loss += output_dict["loss"].item()
                         val_steps += 1
@@ -432,6 +456,23 @@ def main(args):
                         results_folder, f"model-{step // cfg.save_every}.pt"
                     )
                     torch.save(policy.state_dict(), saving_path)
+                    # Best model on validation
+                    best_model_path = os.path.join(
+                        results_folder, f"model-best_{step // cfg.save_every}.pt"
+                    )
+                    if val_loss <= best_val_loss:
+                        best_val_loss = val_loss
+                        # Delete previous best model
+                        previous_best_model_path = glob.glob(
+                            os.path.join(results_folder, "model-best_*.pt")
+                        )
+                        if previous_best_model_path:
+                            os.remove(previous_best_model_path[0])
+                        # Save new best model
+                        torch.save(policy.state_dict(), best_model_path)
+                        print(
+                            f"New best model with val loss {best_val_loss:.3f} at step {step}"
+                        )
             pbar.set_postfix(loss=loss.item())
             step += 1
             pbar.update(1)
