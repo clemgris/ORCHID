@@ -149,7 +149,7 @@ def main(args):
     training_steps = cfg.training_steps
     device = torch.device("cuda")
     log_freq = 10
-    eval_freq = 250
+    eval_freq = 500
 
     # Observation representation shape
     if obs == "pixel":
