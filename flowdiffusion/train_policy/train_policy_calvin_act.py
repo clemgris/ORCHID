@@ -386,11 +386,12 @@ def main(args):
             loss = output_dict["loss"]
             loss.backward()
 
+            # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
+
             optimizer.step()
             scheduler.step()
 
-            # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
             optimizer.zero_grad()
 
             # Logging
