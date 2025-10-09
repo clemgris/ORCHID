@@ -246,6 +246,9 @@ def main(args):
             "input_normalization_modes": {},
             "output_normalization_modes": {"action": "min_max"},
             "vision_backbone": "resnet18",
+            "pretrained_backbone_weights": "ResNet18_Weights.IMAGENET1K_V1"
+            if args.pretrained_encoder
+            else None,
         }
     )
 
@@ -550,6 +553,7 @@ if __name__ == "__main__":
         default="CLIP",
         choices=["CLIP", "Flan-t5", "Siglip"],
     )  # set to text encoder to use
+    parser.add_argument("--pretrained_encoder", action="store_true")
     parser.add_argument("--without_guidance", action="store_true")
     # set to True to train without guidance (i.e. no target conditioning)
     args = parser.parse_args()
