@@ -18,13 +18,12 @@ sys.path.extend(
     ]
 )
 
-from methods.evaluate_policy import evaluate_policy_singlestep
-from model.hierarchical_model_calvin import HierarchicalModel
-from utils.transform_feat import update_feat_transform
-
 from calvin.calvin_models.calvin_agent.datasets.calvin_data_module import (
     CalvinDataModule,
 )
+from methods.evaluate_policy import evaluate_policy_singlestep
+from model.hierarchical_model_calvin import HierarchicalModel
+from utils.transform_feat import update_feat_transform
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--high_level_checkpoint_num",
-        type=int,
+        type=str,
         help="High level checkpoint number",
         default=100,
     )
