@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--policy_checkpoint_num",
-        type=int,
+        type=str,
         help="Policy checkpoint num",
         default=1033,
     )
