@@ -365,6 +365,11 @@ def main(args):
         args.checkpoint_num * cfg.save_every if (args.checkpoint_num is not None) else 0
     )
     print(f"Starting training at step {step}")
+    if step > 0:
+        print(f"Advancing scheduler to step {step} ...")
+        for _ in range(step):
+            scheduler.step()
+
     pbar = tqdm(total=training_steps, initial=step, desc="Training")
 
     best_val_loss = 100  # Set to a large value at the beginning
