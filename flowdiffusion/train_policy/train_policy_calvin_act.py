@@ -373,6 +373,7 @@ def main(args):
     pbar = tqdm(total=training_steps, initial=step, desc="Training")
 
     best_val_loss = 100  # Set to a large value at the beginning
+    val_loss = 100  # Set to a large value at the beginning
 
     while not done:
         for batch in dataloader:
@@ -469,7 +470,7 @@ def main(args):
                     best_model_path = os.path.join(
                         results_folder, f"model-best_{step // cfg.save_every}.pt"
                     )
-                    if val_loss <= best_val_loss:
+                    if val_loss < best_val_loss:
                         best_val_loss = val_loss
                         # Delete previous best model
                         previous_best_model_path = glob.glob(
