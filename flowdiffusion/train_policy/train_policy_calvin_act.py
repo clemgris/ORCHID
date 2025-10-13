@@ -330,11 +330,11 @@ def main(args):
     print("Number of training parameters:", sum(p.numel() for p in policy.parameters()))
 
     optimizer = torch.optim.Adam(policy.parameters(), lr=1e-4)
-    scheduler = get_cosine_schedule_with_warmup(
-        optimizer,
-        num_warmup_steps=2000,
-        num_training_steps=training_steps,
-    )
+    # scheduler = get_cosine_schedule_with_warmup(
+    #     optimizer,
+    #     num_warmup_steps=2000,
+    #     num_training_steps=training_steps,
+    # )
 
     # Create dataloader for offline training.
     dataloader = torch.utils.data.DataLoader(
@@ -365,10 +365,10 @@ def main(args):
         args.checkpoint_num * cfg.save_every if (args.checkpoint_num is not None) else 0
     )
     print(f"Starting training at step {step}")
-    if step > 0:
-        print(f"Advancing scheduler to step {step} ...")
-        for _ in range(step):
-            scheduler.step()
+    # if step > 0:
+    #     print(f"Advancing scheduler to step {step} ...")
+    #     for _ in range(step):
+    #         scheduler.step()
 
     pbar = tqdm(total=training_steps, initial=step, desc="Training")
 
@@ -399,7 +399,7 @@ def main(args):
             torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
 
             optimizer.step()
-            scheduler.step()
+            # scheduler.step()
 
             optimizer.zero_grad()
 
@@ -407,10 +407,10 @@ def main(args):
             if step % log_freq == 0:
                 # print(f"Step: {step} | Train loss: {loss.item():.3f}")
                 # Write the training loss to a file
-                current_lr = scheduler.get_last_lr()[0]
+                # current_lr = scheduler.get_last_lr()[0]
                 with open(os.path.join(results_folder, "train_loss.txt"), "a") as f:
                     f.write(
-                        f"Step {step} | Train loss {loss.item():.3f} | LR {current_lr:.3e}\n"
+                        f"Step {step} | Train loss {loss.item():.3f}\n" # | LR {current_lr:.3e}\n"
                     )
 
             # Evaluation
