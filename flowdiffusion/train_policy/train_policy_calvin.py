@@ -16,6 +16,8 @@ sys.path.append(
 )
 
 import torch
+from lerobot.common.policies.diffusion.configuration_diffusion import DiffusionConfig
+from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
 from omegaconf import DictConfig, OmegaConf
 from transformers import (
     AutoTokenizer,
@@ -25,9 +27,6 @@ from transformers import (
     SiglipTokenizer,
     T5EncoderModel,
 )
-
-from lerobot.common.policies.diffusion.configuration_diffusion import DiffusionConfig
-from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
 
 sys.path.append(
     os.path.join(
@@ -96,7 +95,9 @@ def main(args):
                     },
                     "num_subgoals": args.num_subgoals,
                     "pad": True,
-                    "lang_folder": "lang_annotations",
+                    "lang_folder": "lang_annotations"
+                    if args.server == "hacienda"
+                    else "new_lang_annotations",
                     "num_workers": 2,
                     "norm_feat": args.norm,
                     "prob_aug": args.data_aug_prob,

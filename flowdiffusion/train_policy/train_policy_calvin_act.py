@@ -27,7 +27,6 @@ from transformers import (
     SiglipTextModel,
     SiglipTokenizer,
     T5EncoderModel,
-    get_cosine_schedule_with_warmup,
 )
 
 sys.path.append(
@@ -97,7 +96,9 @@ def main(args):
                     },
                     "num_subgoals": args.num_subgoals,
                     "pad": True,
-                    "lang_folder": "lang_annotations",
+                    "lang_folder": "lang_annotations"
+                    if args.server == "hacienda"
+                    else "new_lang_annotations",
                     "num_workers": 2,
                     "norm_feat": args.norm,
                     "prob_aug": args.data_aug_prob,
@@ -410,7 +411,7 @@ def main(args):
                 # current_lr = scheduler.get_last_lr()[0]
                 with open(os.path.join(results_folder, "train_loss.txt"), "a") as f:
                     f.write(
-                        f"Step {step} | Train loss {loss.item():.3f}\n" # | LR {current_lr:.3e}\n"
+                        f"Step {step} | Train loss {loss.item():.3f}\n"  # | LR {current_lr:.3e}\n"
                     )
 
             # Evaluation

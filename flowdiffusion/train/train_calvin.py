@@ -93,7 +93,9 @@ def main(args):
                     },
                     "num_subgoals": args.num_subgoals,
                     "pad": True,
-                    "lang_folder": "lang_annotations",
+                    "lang_folder": "lang_annotations"
+                    if args.server == "hacienda"
+                    else "new_lang_annotations",
                     "num_workers": 2,
                     "goal": diffuse_on,
                     "norm_feat": args.norm,
