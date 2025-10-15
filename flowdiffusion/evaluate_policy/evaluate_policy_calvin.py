@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 
 import hydra
@@ -296,4 +297,9 @@ if __name__ == "__main__":
     )
     model = HierarchicalModel(config, transforms_dict)
 
+    start_time = time.time()
+
     evaluate_policy_singlestep(model, env, policy_dataset, args, conf_dir)
+
+    elapsed_time = time.time() - start_time
+    print("Evaluation time: ", time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
