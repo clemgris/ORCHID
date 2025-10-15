@@ -15,8 +15,8 @@ from transformers import (
     AutoTokenizer,
     CLIPTextModel,
     CLIPTokenizer,
-    SiglipTextModel,
-    SiglipTokenizer,
+    # SiglipTextModel,
+    # SiglipTokenizer,
     T5EncoderModel,
 )
 
@@ -31,23 +31,21 @@ sys.path.extend(
 )
 
 # === Local Imports ===
-from encoder import R3MEncoder, ViTEncoder
-from goal_diffusion import GoalGaussianDiffusion, Trainer
-from tools import save_images
-from unet import UnetMW as Unet
-from vis_features import pca_project_features
-
+# from encoder import R3MEncoder, ViTEncoder
 # === CALVIN and LEROBOT Imports ===
 from calvin.calvin_models.calvin_agent.models.calvin_base_model import CalvinBaseModel
-from lerobot.common.policies.diffusion.modeling_diffusion import (
-    DiffusionConfig,
-    DiffusionPolicy,
-)
-
+from goal_diffusion import GoalGaussianDiffusion, Trainer
 from lerobot.common.policies.act.modeling_act import (
     ACTConfig,
     ACTPolicy,
 )
+from lerobot.common.policies.diffusion.modeling_diffusion import (
+    DiffusionConfig,
+    DiffusionPolicy,
+)
+from tools import save_images
+from unet import UnetMW as Unet
+from vis_features import pca_project_features
 
 logger = logging.getLogger(__name__)
 
@@ -122,11 +120,11 @@ class HierarchicalModel(CalvinBaseModel):
         }
 
     def _init_policy(self, cfg):
-        if cfg.policy.model == 'diffusion':
+        if cfg.policy.model == "diffusion":
             self.policy = DiffusionPolicy(
                 DiffusionConfig(**cfg.policy.diff_cfg), dataset_stats=self.stats
             )
-        elif cfg.policy.model == 'act':
+        elif cfg.policy.model == "act":
             self.policy = ACTPolicy(
                 ACTConfig(**cfg.policy.diff_cfg), dataset_stats=self.stats
             )
@@ -145,10 +143,11 @@ class HierarchicalModel(CalvinBaseModel):
         self.policy.to(self.device)
 
     def _init_vision_encoder(self, cfg):
-        if "dino_vit" in cfg.policy.datamodule.lang_dataset.goal:
-            self.vision_encoder = ViTEncoder()
-        elif "r3m" in cfg.policy.datamodule.lang_dataset.goal:
-            self.vision_encoder = R3MEncoder("resnet18")
+        # if "dino_vit" in cfg.policy.datamodule.lang_dataset.goal:
+        #     self.vision_encoder = ViTEncoder()
+        # elif "r3m" in cfg.policy.datamodule.lang_dataset.goal:
+        #     self.vision_encoder = R3MEncoder("resnet18")
+        pass
 
     def _init_text_encoder(self, cfg):
         text_encoder_name = cfg.policy.get("text_encoder", "CLIP")
@@ -163,7 +162,6 @@ class HierarchicalModel(CalvinBaseModel):
             self.text_embed_dim = 512
             self.precision = "fp16"
             self.amp = True
-
         elif text_encoder_name == "Flan-t5":
             if cfg.server == "jz":
                 text_pretrained_model = (
@@ -177,16 +175,16 @@ class HierarchicalModel(CalvinBaseModel):
             self.precision = "no"
             self.amp = False
 
-        elif text_encoder_name == "Siglip":
-            if cfg.server == "jz":
-                text_pretrained_model = "/lustre/fsn1/projects/rech/fch/uxv44vw/models/google/siglip-base-patch16-224"
-            else:
-                text_pretrained_model = "google/siglip-base-patch16-224"
-            self.tokenizer = SiglipTokenizer.from_pretrained(text_pretrained_model)
-            self.text_encoder = SiglipTextModel.from_pretrained(text_pretrained_model)
-            self.text_embed_dim = 768
-            self.precision = "fp16"
-            self.amp = True
+        # elif text_encoder_name == "Siglip":
+        #     if cfg.server == "jz":
+        #         text_pretrained_model = "/lustre/fsn1/projects/rech/fch/uxv44vw/models/google/siglip-base-patch16-224"
+        #     else:
+        #         text_pretrained_model = "google/siglip-base-patch16-224"
+        #     self.tokenizer = SiglipTokenizer.from_pretrained(text_pretrained_model)
+        #     self.text_encoder = SiglipTextModel.from_pretrained(text_pretrained_model)
+        #     self.text_embed_dim = 768
+        #     self.precision = "fp16"
+        #     self.amp = True
 
         self.text_encoder = self.text_encoder.to(self.device)
         self.text_encoder.requires_grad_(False)
@@ -226,20 +224,22 @@ class HierarchicalModel(CalvinBaseModel):
         unet = unet.to(self.device)
 
         sample_per_seq = cfg.num_subgoals + 1
-        self.sample_steps = 100
 
         diffusion = GoalGaussianDiffusion(
             channels=self.high_level_channels * (sample_per_seq - 1),
             model=unet,
             image_size=target_size,
             timesteps=100,
-            sampling_timesteps=self.sample_steps,
             loss_type="l2",
             objective=cfg.high_level.diffusion_objective,
             beta_schedule="cosine",
             min_snr_loss_weight=True,
             auto_normalize=False,
+            sampling_timesteps=cfg.high_level.sampling_timesteps,
+            ddim_sampling_eta=getattr(cfg.high_level, "ddim_sampling_eta", 0.0),
         )
+
+        self.hl_use_ddim = cfg.high_level.sampling_timesteps == 100
 
         trainer = Trainer(
             diffusion_model=diffusion,
@@ -522,14 +522,22 @@ class HierarchicalModel(CalvinBaseModel):
                 obs_goal["text"] = encoded_text
             # Predict action
             with torch.inference_mode():
-                if self.cfg.policy.model == 'diffusion':
+                if self.cfg.policy.model == "diffusion":
                     self.actions = (
-                    self.policy.diffusion.generate_actions(obs_goal).cpu().detach()[0]
-                )
-                elif self.cfg.policy.model == 'act':
-                    self.actions = self.policy.model({k: v[0] for k,v in obs_goal.items()})[0][0].cpu().detach()
+                        self.policy.diffusion.generate_actions(obs_goal)
+                        .cpu()
+                        .detach()[0]
+                    )
+                elif self.cfg.policy.model == "act":
+                    self.actions = (
+                        self.policy.model({k: v[0] for k, v in obs_goal.items()})[0][0]
+                        .cpu()
+                        .detach()
+                    )
                 else:
-                    raise ValueError(f"Policy model {self.cfg.policy.model} not supported")
+                    raise ValueError(
+                        f"Policy model {self.cfg.policy.model} not supported"
+                    )
 
             # Unormalise actions
             self.actions = self._unorm_action_fonct(self.actions)

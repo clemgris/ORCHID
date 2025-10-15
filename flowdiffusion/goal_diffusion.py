@@ -52,6 +52,7 @@ def tensors2vectors(tensors):
         torch.from_numpy(np.array([tensor2vector(tensor) for tensor in tensors])) / 255
     )
 
+
 def k_swaps_perm(n, k, p):
     idx = torch.arange(n)
     if torch.rand(1) < p:
@@ -59,6 +60,7 @@ def k_swaps_perm(n, k, p):
             i, j = torch.randperm(n)[:2]
             idx[i], idx[j] = idx[j].clone(), idx[i].clone()
     return idx
+
 
 def temporal_shuffle_batch(batch, max_k, p):
     """
@@ -665,9 +667,20 @@ class GoalGaussianDiffusion(nn.Module):
         return model_mean, posterior_variance, posterior_log_variance, x_start
 
     @torch.no_grad()
-    def p_sample(self, x, t: int, x_cond, task_embed, guidance_weight=0):
+    def p_sample(self, x, t: int, x_cond, task_embed, guidance_weight=0, pred_img=None):
         b, *_, device = *x.shape, x.device
-        batched_times = torch.full((b,), t, device=x.device, dtype=torch.long)
+
+        # batched_times = torch.full((b,), t, device=device, dtype=torch.long)
+        if isinstance(t, torch.Tensor):
+            if t.ndim == 0:  # scalar tensor
+                batched_times = torch.full(
+                    (b,), t.item(), device=device, dtype=torch.long
+                )
+            else:  # already batch-shaped
+                batched_times = t.to(device, dtype=torch.long)
+        else:  # plain Python int
+            batched_times = torch.full((b,), t, device=device, dtype=torch.long)
+
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(
             x,
             batched_times,
@@ -676,13 +689,32 @@ class GoalGaussianDiffusion(nn.Module):
             clip_denoised=True,
             guidance_weight=guidance_weight,
         )
-        noise = torch.randn_like(x) if t > 0 else 0.0  # no noise if t == 0
-        pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
-        return pred_img, x_start
+
+        if pred_img is None:
+            noise = torch.randn_like(x) if t > 0 else 0.0  # no noise if t == 0
+            pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
+
+        # log prob of the predicted image
+        var = model_log_variance.exp().clamp(min=1e-6)
+        log_prob = -0.5 * (
+            ((pred_img.detach() - model_mean) ** 2) / var
+            + model_log_variance
+            + torch.log(2 * torch.as_tensor(math.pi))
+        )
+
+        log_prob = log_prob.mean(dim=tuple(range(1, log_prob.ndim)))
+
+        return pred_img, x_start, log_prob
 
     @torch.no_grad()
     def p_sample_loop(
-        self, shape, x_cond, task_embed, return_all_timesteps=False, guidance_weight=0
+        self,
+        shape,
+        x_cond,
+        task_embed,
+        return_all_timesteps=False,
+        guidance_weight=0,
+        return_log_probs=False,
     ):
         batch, device = shape[0], self.betas.device
 
@@ -690,6 +722,7 @@ class GoalGaussianDiffusion(nn.Module):
         imgs = [img]
 
         x_start = None
+        all_log_probs = []
 
         for t in tqdm(
             reversed(range(0, self.num_timesteps)),
@@ -697,19 +730,30 @@ class GoalGaussianDiffusion(nn.Module):
             total=self.num_timesteps,
         ):
             # self_cond = x_start if self.self_condition else None
-            img, x_start = self.p_sample(
+            img, x_start, log_prob = self.p_sample(
                 img, t, x_cond, task_embed, guidance_weight=guidance_weight
             )
             imgs.append(img)
+            all_log_probs.append(log_prob)
 
         ret = img if not return_all_timesteps else torch.stack(imgs, dim=1)
 
         ret = self.unnormalize(ret)
-        return ret
+
+        if return_log_probs:
+            return ret, imgs, all_log_probs
+        else:
+            return ret
 
     @torch.no_grad()
     def ddim_sample(
-        self, shape, x_cond, task_embed, return_all_timesteps=False, guidance_weight=0
+        self,
+        shape,
+        x_cond,
+        task_embed,
+        return_all_timesteps=False,
+        guidance_weight=0,
+        return_log_probs=False,
     ):
         batch, device, total_timesteps, sampling_timesteps, eta, objective = (
             shape[0],
@@ -732,6 +776,8 @@ class GoalGaussianDiffusion(nn.Module):
         imgs = [img]
 
         x_start = None
+
+        log_probs = []
 
         for time, time_next in tqdm(time_pairs, desc="sampling loop time step"):
             time_cond = torch.full((batch,), time, device=device, dtype=torch.long)
@@ -761,14 +807,24 @@ class GoalGaussianDiffusion(nn.Module):
 
             noise = torch.randn_like(img)
 
-            img = x_start * alpha_next.sqrt() + c * pred_noise + sigma * noise
+            img_mean = x_start * alpha_next.sqrt() + c * pred_noise
+            img = img_mean + sigma * noise
 
             imgs.append(img)
+
+            if return_log_probs:
+                log_prob = -((img.detach() - img_mean) ** 2) / (
+                    2 * sigma**2
+                ) - torch.log(torch.tensor(1.0 / math.sqrt(2 * math.pi * sigma**2)))
+                log_probs.append(log_prob.mean(dim=tuple(range(1, log_prob.ndim))))
 
         ret = img if not return_all_timesteps else torch.stack(imgs, dim=1)
 
         ret = self.unnormalize(ret)
-        return ret
+        if return_log_probs:
+            return ret, imgs, log_probs
+        else:
+            return ret
 
     @torch.no_grad()
     def sample(
@@ -778,6 +834,7 @@ class GoalGaussianDiffusion(nn.Module):
         batch_size=16,
         return_all_timesteps=False,
         guidance_weight=0,
+        return_log_probs=False,
     ):
         image_size, channels = self.image_size, self.channels
         sample_fn = (
@@ -789,6 +846,7 @@ class GoalGaussianDiffusion(nn.Module):
             task_embed,
             return_all_timesteps=return_all_timesteps,
             guidance_weight=guidance_weight,
+            return_log_probs=return_log_probs,
         )
 
     @torch.no_grad()
@@ -809,7 +867,7 @@ class GoalGaussianDiffusion(nn.Module):
             reversed(range(0, t)), desc="interpolation sample time step", total=t
         ):
             self_cond = x_start if self.self_condition else None
-            img, x_start = self.p_sample(img, i, self_cond)
+            img, x_start, _ = self.p_sample(img, i, self_cond)
 
         return img
 
@@ -844,7 +902,9 @@ class GoalGaussianDiffusion(nn.Module):
             t=self.num_subgoals,
             c=self.channels // self.num_subgoals,
         )
-        x_prepost = temporal_shuffle_batch(x_prepost, self.num_swaps, self.prob_temp_swaps)
+        x_prepost = temporal_shuffle_batch(
+            x_prepost, self.num_swaps, self.prob_temp_swaps
+        )
         x_prepost = rearrange(
             x_prepost,
             "b t c h w -> b (t c) h w",
@@ -867,7 +927,6 @@ class GoalGaussianDiffusion(nn.Module):
         loss = self.loss_fn(model_out, target, reduction="none")
         loss = reduce(loss, "b ... -> b (...)", "mean")
         loss = loss * extract(self.loss_weight, t, loss.shape)
-
 
         if torch.isnan(loss).any():
             raise ValueError("NaN in diffusion loss")
@@ -1116,7 +1175,14 @@ class Trainer(object):
         batch_text_embed = self.text_encoder(**batch_text_ids).last_hidden_state
         return batch_text_embed
 
-    def sample(self, x_conds, batch_text, batch_size=1, guidance_weight=0):
+    def sample(
+        self,
+        x_conds,
+        batch_text,
+        batch_size=1,
+        guidance_weight=0,
+        return_log_probs=False,
+    ):
         device = self.device
         task_embeds = self.encode_batch_text(batch_text)
         return self.ema.ema_model.sample(
@@ -1124,6 +1190,7 @@ class Trainer(object):
             task_embeds.to(device),
             batch_size=batch_size,
             guidance_weight=guidance_weight,
+            return_log_probs=return_log_probs,
         )
 
     def train(self):

@@ -398,6 +398,7 @@ class HierarchicalModel:
                 "pixel",  # self.cfg.policy.datamodule.lang_dataset.obs
             )[None, None]
             target = self.sub_goals[:, sub_goal_idx].to(self.device)[None]
+            target = (target + 1) / 2  # Normalise target to [0, 1] range
             state = torch.zeros((init.shape[0], 0)).to(self.device)
             obs_goal = {
                 "observation.state": state[None],
@@ -425,7 +426,6 @@ class HierarchicalModel:
                 self.actions = (
                     self.policy.diffusion.generate_actions(obs_goal).cpu().detach()[0]
                 )
-
             # Unormalise actions
             self.actions = self._unorm_action_fonct(self.actions)
 

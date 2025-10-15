@@ -37,28 +37,42 @@ if __name__ == "__main__":
         "--policy_checkpoint_num",
         type=str,
         help="Policy checkpoint num",
-        default=1033,
+        default=9999,
     )
 
     parser.add_argument(
         "--policy_results_folder",
         type=str,
         help="Results folder",
-        default="/home/grislain/AVDC/calvin/models/policy_huit",
+        default="/home/grislain/AVDC/calvin/models/LL_RGB",
     )
 
     parser.add_argument(
         "--high_level_checkpoint_num",
         type=str,
         help="High level checkpoint number",
-        default=100,
+        default=199,
     )
 
     parser.add_argument(
         "--high_level_results_folder",
         type=str,
         help="Results folder",
-        default="/home/grislain/AVDC/calvin/models/results_huit_ann/calvin",
+        default="/home/grislain/AVDC/calvin/models/HL_RGB",
+    )
+
+    parser.add_argument(
+        "--high_level_sampling_timesteps",
+        type=int,
+        help="Number of sampling timesteps for high level model",
+        default=100,
+    )
+
+    parser.add_argument(
+        "--high_level_ddim_eta",
+        type=float,
+        help="DDIM eta for high level model",
+        default=0.0,
     )
 
     parser.add_argument(
@@ -205,6 +219,8 @@ if __name__ == "__main__":
                 "results_folder": args.high_level_results_folder,
                 "use_oracle_subgoals": args.use_oracle_subgoals,
                 **high_level_data_config,
+                "sampling_timesteps": args.high_level_sampling_timesteps,
+                "ddim_sampling_eta": args.high_level_ddim_eta,
             },
             "debug_path": args.debug_path,
             "server": args.server,
