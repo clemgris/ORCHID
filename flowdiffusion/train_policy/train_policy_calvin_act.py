@@ -27,6 +27,7 @@ from transformers import (
     SiglipTextModel,
     SiglipTokenizer,
     T5EncoderModel,
+    get_cosine_schedule_with_warmup,
 )
 
 sys.path.append(
@@ -150,7 +151,7 @@ def main(args):
     training_steps = cfg.training_steps
     device = torch.device("cuda")
     log_freq = 10
-    eval_freq = 500
+    eval_freq = None  # 1000
 
     # Observation representation shape
     if obs == "pixel":
@@ -330,12 +331,21 @@ def main(args):
     # Training parameters
     print("Number of training parameters:", sum(p.numel() for p in policy.parameters()))
 
+    num_warmup_steps = int(0.05 * training_steps)
     optimizer = torch.optim.Adam(policy.parameters(), lr=1e-4)
-    # scheduler = get_cosine_schedule_with_warmup(
-    #     optimizer,
-    #     num_warmup_steps=2000,
-    #     num_training_steps=training_steps,
-    # )
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=num_warmup_steps,
+        num_training_steps=training_steps,
+    )
+    min_lr = 1e-7
+    print(f"Number of warmup steps: {num_warmup_steps}")
+
+    def step_scheduler_clamped(scheduler, min_lr=min_lr):
+        scheduler.step()
+        for param_group in optimizer.param_groups:
+            if param_group["lr"] < min_lr:
+                param_group["lr"] = min_lr
 
     # Create dataloader for offline training.
     dataloader = torch.utils.data.DataLoader(
@@ -366,10 +376,10 @@ def main(args):
         args.checkpoint_num * cfg.save_every if (args.checkpoint_num is not None) else 0
     )
     print(f"Starting training at step {step}")
-    # if step > 0:
-    #     print(f"Advancing scheduler to step {step} ...")
-    #     for _ in range(step):
-    #         scheduler.step()
+    if step > 0:
+        print(f"Advancing scheduler to step {step} ...")
+        for _ in range(step):
+            step_scheduler_clamped(scheduler, min_lr=min_lr)
 
     pbar = tqdm(total=training_steps, initial=step, desc="Training")
 
@@ -400,7 +410,7 @@ def main(args):
             torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
 
             optimizer.step()
-            # scheduler.step()
+            step_scheduler_clamped(scheduler, min_lr=min_lr)
 
             optimizer.zero_grad()
 
@@ -408,14 +418,14 @@ def main(args):
             if step % log_freq == 0:
                 # print(f"Step: {step} | Train loss: {loss.item():.3f}")
                 # Write the training loss to a file
-                # current_lr = scheduler.get_last_lr()[0]
+                current_lr = max(min_lr, scheduler.get_last_lr()[0])
                 with open(os.path.join(results_folder, "train_loss.txt"), "a") as f:
                     f.write(
-                        f"Step {step} | Train loss {loss.item():.3f}\n"  # | LR {current_lr:.3e}\n"
+                        f"Step {step} | Train loss {loss.item():.3f} | LR {current_lr:.3e}\n"
                     )
 
             # Evaluation
-            if step % eval_freq == 0:
+            if eval_freq is not None and step % eval_freq == 0:
                 policy.eval()
                 val_loss = 0.0
                 val_steps = 0
