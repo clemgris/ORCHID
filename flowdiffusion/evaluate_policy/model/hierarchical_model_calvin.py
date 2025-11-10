@@ -431,7 +431,7 @@ class HierarchicalModel(CalvinBaseModel):
 
         return image
 
-    def step(self, obs, text_goal, oracle_subgoals=None):
+    def step(self, obs, text_goal, oracle_subgoals=None, encoded_text=None):
         """
         Args:
             obs: environment observations
@@ -440,7 +440,7 @@ class HierarchicalModel(CalvinBaseModel):
             action: predicted action
         """
         # Extract text goal embedding
-        if self.use_text:
+        if self.use_text and encoded_text is None:
             encoded_text = self._extract_text_embedding(text_goal)
 
         # Orcale subgoals
