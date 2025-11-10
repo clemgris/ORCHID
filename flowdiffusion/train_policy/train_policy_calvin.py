@@ -248,6 +248,10 @@ def main(args):
         }
     )
 
+    if args.pretrained_encoder:
+        diff_cfg["pretrained_backbone_weights"] = args.pretrained_encoder
+        diff_cfg["use_group_norm"] = False
+
     if obs == "pixel":
         diff_cfg["input_shapes"]["observation.image_static"] = obs_shape
         if args.use_gripper:
@@ -431,6 +435,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--use_gripper", action="store_true"
     )  # set to True to use gripper observations
+    parser.add_argument("--pretrained_encoder", type=str, default=None)
     parser.add_argument(
         "--goal",
         type=str,
