@@ -1,6 +1,7 @@
 import functools
 import logging
 import multiprocessing
+import random
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
@@ -550,6 +551,45 @@ def get_initial_states(num_data, task):
         seq = [task]
         if check_sequence(state, seq):
             results.append((state, seq))
+    results = (results * (num_data // len(results) + 1))[:num_data]
+    logger.info("Done generating evaluation sequences.")
+
+    return results
+
+
+def get_random_initial_states(num_data, task):
+    possible_conditions = {
+        "led": [0, 1],
+        "lightbulb": [0, 1],
+        "slider": ["right", "left"],
+        "drawer": ["closed", "open"],
+        "red_block": ["table", "slider_right", "slider_left", "grasped", "drawer"],
+        "blue_block": ["table", "slider_right", "slider_left", "grasped", "drawer"],
+        "pink_block": ["table", "slider_right", "slider_left", "grasped", "drawer"],
+        "grasped": [0, 1],
+    }
+
+    f = (
+        lambda l: l.count("table") in [1, 2]
+        and l.count("slider_right") < 2
+        and l.count("slider_left") < 2
+        and l.count("grasped") < 2
+        and (l.count("grasped") == 0 or l[-1] == 1)
+    )
+    value_combinations = filter(f, product(*possible_conditions.values()))
+    initial_states = [
+        dict(zip(possible_conditions.keys(), vals)) for vals in value_combinations
+    ]
+    random.shuffle(initial_states)
+    logger.info("Start generating evaluation sequences.")
+    # set the numpy seed temporarily to 0
+    results = []
+    for state in initial_states:
+        seq = [task]
+        if check_sequence(state, seq):
+            results.append((state, seq))
+    if len(results) == 0:
+        breakpoint()
     results = (results * (num_data // len(results) + 1))[:num_data]
     logger.info("Done generating evaluation sequences.")
 
