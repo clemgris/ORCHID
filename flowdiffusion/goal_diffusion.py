@@ -680,7 +680,6 @@ class GoalGaussianDiffusion(nn.Module):
                 batched_times = t.to(device, dtype=torch.long)
         else:  # plain Python int
             batched_times = torch.full((b,), t, device=device, dtype=torch.long)
-
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(
             x,
             batched_times,
@@ -715,6 +714,7 @@ class GoalGaussianDiffusion(nn.Module):
         return_all_timesteps=False,
         guidance_weight=0,
         return_log_probs=False,
+        deterministic_last=None
     ):
         batch, device = shape[0], self.betas.device
 
@@ -728,6 +728,7 @@ class GoalGaussianDiffusion(nn.Module):
             reversed(range(0, self.num_timesteps)),
             desc="sampling loop time step",
             total=self.num_timesteps,
+            leave=False,
         ):
             # self_cond = x_start if self.self_condition else None
             img, x_start, log_prob = self.p_sample(
@@ -754,6 +755,7 @@ class GoalGaussianDiffusion(nn.Module):
         return_all_timesteps=False,
         guidance_weight=0,
         return_log_probs=False,
+        deterministic_last=True
     ):
         batch, device, total_timesteps, sampling_timesteps, eta, objective = (
             shape[0],
@@ -763,7 +765,6 @@ class GoalGaussianDiffusion(nn.Module):
             self.ddim_sampling_eta,
             self.objective,
         )
-
         times = torch.linspace(
             -1, total_timesteps - 1, steps=sampling_timesteps + 1
         )  # [-1, 0, 1, 2, ..., T-1] when sampling_timesteps == total_timesteps
@@ -778,8 +779,9 @@ class GoalGaussianDiffusion(nn.Module):
         x_start = None
 
         log_probs = []
+        is_last = False
 
-        for time, time_next in tqdm(time_pairs, desc="sampling loop time step"):
+        for time, time_next in tqdm(time_pairs, desc="sampling loop time step", leave=False):
             time_cond = torch.full((batch,), time, device=device, dtype=torch.long)
             # self_cond = x_start if self.self_condition else None
             pred_noise, x_start, *_ = self.model_predictions(
@@ -793,9 +795,8 @@ class GoalGaussianDiffusion(nn.Module):
             )
 
             if time_next < 0:
-                img = x_start
-                imgs.append(img)
-                continue
+                is_last = deterministic_last
+                time_next = 0
 
             alpha = self.alphas_cumprod[time]
             alpha_next = self.alphas_cumprod[time_next]
@@ -808,15 +809,21 @@ class GoalGaussianDiffusion(nn.Module):
             noise = torch.randn_like(img)
 
             img_mean = x_start * alpha_next.sqrt() + c * pred_noise
-            img = img_mean + sigma * noise
-
+            if not is_last:
+                img = img_mean + sigma * noise
+                if return_log_probs:
+                    log_prob = (
+                        - ((img.detach() - img_mean) ** 2) / (2 * (sigma**2)) 
+                        - torch.log(sigma)
+                        - torch.log(torch.sqrt(2 * torch.as_tensor(math.pi)))
+                    )
+                    log_probs.append(log_prob.mean(dim=tuple(range(1, log_prob.ndim))))
+            else:
+                img = x_start
+                if return_log_probs:
+                    log_prob = torch.zeros(img.shape[0], device=img.device)
+                    log_probs.append(log_prob)
             imgs.append(img)
-
-            if return_log_probs:
-                log_prob = -((img.detach() - img_mean) ** 2) / (
-                    2 * sigma**2
-                ) - torch.log(torch.tensor(1.0 / math.sqrt(2 * math.pi * sigma**2)))
-                log_probs.append(log_prob.mean(dim=tuple(range(1, log_prob.ndim))))
 
         ret = img if not return_all_timesteps else torch.stack(imgs, dim=1)
 
@@ -835,6 +842,7 @@ class GoalGaussianDiffusion(nn.Module):
         return_all_timesteps=False,
         guidance_weight=0,
         return_log_probs=False,
+        deterministic_last=False
     ):
         image_size, channels = self.image_size, self.channels
         sample_fn = (
@@ -847,6 +855,7 @@ class GoalGaussianDiffusion(nn.Module):
             return_all_timesteps=return_all_timesteps,
             guidance_weight=guidance_weight,
             return_log_probs=return_log_probs,
+            deterministic_last=deterministic_last
         )
 
     @torch.no_grad()
