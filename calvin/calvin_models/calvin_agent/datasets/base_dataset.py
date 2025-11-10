@@ -4,31 +4,30 @@ from pathlib import Path
 from typing import Dict, Tuple, Union
 
 import numpy as np
-import pyhash
 import torch
 from omegaconf import DictConfig
 from torch.utils.data import Dataset
 
-hasher = pyhash.fnv1_32()
+# hasher = pyhash.fnv1_32()
 logger = logging.getLogger(__name__)
 
 
-def get_validation_window_size(
-    idx: int, min_window_size: int, max_window_size: int
-) -> int:
-    """
-    In validation step, use hash function instead of random sampling for consistent window sizes across epochs.
+# def get_validation_window_size(
+#     idx: int, min_window_size: int, max_window_size: int
+# ) -> int:
+#     """
+#     In validation step, use hash function instead of random sampling for consistent window sizes across epochs.
 
-    Args:
-        idx: Sequence index.
-        min_window_size: Minimum window size.
-        max_window_size: Maximum window size.
+#     Args:
+#         idx: Sequence index.
+#         min_window_size: Minimum window size.
+#         max_window_size: Maximum window size.
 
-    Returns:
-        Window size computed with hash function.
-    """
-    window_range = max_window_size - min_window_size + 1
-    return min_window_size + hasher(str(idx)) % window_range
+#     Returns:
+#         Window size computed with hash function.
+#     """
+#     window_range = max_window_size - min_window_size + 1
+#     return min_window_size + hasher(str(idx)) % window_range
 
 
 class BaseDataset(Dataset):
