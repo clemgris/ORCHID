@@ -2,25 +2,26 @@ import contextlib
 import json
 import logging
 import os
+import random
+import zlib
 from collections import Counter
 from pathlib import Path
+from pydoc import locate
 
 import cv2
 import hydra
 import numpy as np
-import pyhash
 import torch
 from calvin_agent.utils.utils import add_text, format_sftp_path
 from numpy import pi
 from omegaconf import OmegaConf
 
-hasher = pyhash.fnv1_32()
+# import pyhash
+# hasher = pyhash.fnv1_32()
 logger = logging.getLogger(__name__)
 
 
-def get_default_model_and_env(
-    train_folder, dataset_path, checkpoint, env=None, device_id=0
-):
+def get_default_env(train_folder, dataset_path, checkpoint, env=None, device_id=0):
     train_cfg_path = Path(train_folder) / ".hydra/config.yaml"
     train_cfg_path = format_sftp_path(train_cfg_path)
     cfg = OmegaConf.load(train_cfg_path)
@@ -64,6 +65,56 @@ def get_default_model_and_env(
     #     )
     # model = model.cuda(device)
     model = None
+    print("Successfully loaded model.")
+
+    return model, env, data_module
+
+
+def get_default_model_and_env(
+    train_folder, dataset_path, checkpoint, env=None, device_id=0
+):
+    train_cfg_path = Path(train_folder) / ".hydra/config.yaml"
+    train_cfg_path = format_sftp_path(train_cfg_path)
+    cfg = OmegaConf.load(train_cfg_path)
+    lang_folder = cfg.datamodule.datasets.lang_dataset.lang_folder
+    if not hydra.core.global_hydra.GlobalHydra.instance().is_initialized():
+        hydra.initialize("../../conf/datamodule/datasets")
+    # we don't want to use shm dataset for evaluation
+    datasets_cfg = hydra.compose(
+        "vision_lang.yaml", overrides=["lang_dataset.lang_folder=" + lang_folder]
+    )
+    # since we don't use the trainer during inference, manually set up data_module
+    cfg.datamodule.datasets = datasets_cfg
+    cfg.datamodule.root_data_dir = dataset_path
+    data_module = hydra.utils.instantiate(cfg.datamodule, num_workers=0)
+    data_module.prepare_data()
+    data_module.setup()
+    dataloader = data_module.val_dataloader()
+    dataset = dataloader.dataset.datasets["lang"]
+    device = torch.device(f"cuda:{device_id}")
+
+    if env is None:
+        rollout_cfg = OmegaConf.load(
+            Path(__file__).parents[2] / "conf/callbacks/rollout/default.yaml"
+        )
+        env = hydra.utils.instantiate(
+            rollout_cfg.env_cfg, dataset, device, show_gui=False
+        )
+
+    checkpoint = format_sftp_path(checkpoint)
+    print(f"Loading model from {checkpoint}")
+    # import the model class that was used for the training
+    model_cls = locate(cfg.model._target_)
+    model = model_cls.load_from_checkpoint(checkpoint)
+    model.load_lang_embeddings(
+        dataset.abs_datasets_dir / dataset.lang_folder / "embeddings.npy"
+    )
+    model.freeze()
+    if cfg.model.action_decoder.get("load_action_bounds", False):
+        model.action_decoder._setup_action_bounds(
+            cfg.datamodule.root_data_dir, None, None, True
+        )
+    model = model.cuda(device)
     print("Successfully loaded model.")
 
     return model, env, data_module
@@ -251,7 +302,7 @@ def get_env_state_for_initial_condition(initial_condition):
         np.array([2.29995412e-01, -1.19995140e-01, 4.59990010e-01]),
     ]
     # we want to have a "deterministic" random seed for each initial condition
-    seed = hasher(str(initial_condition.values()))
+    seed = zlib.adler32(str(initial_condition.values()).encode("utf-8"))
     with temp_seed(seed):
         np.random.shuffle(block_table)
 
@@ -290,5 +341,159 @@ def get_env_state_for_initial_condition(initial_condition):
         else:
             scene_obs[18:21] = block_table[1]
         scene_obs[23] = np.random.uniform(*block_rot_z_range)
+
+    return robot_obs, scene_obs
+
+
+def get_random_env_state_for_initial_condition(initial_condition):
+    # lower_joint_limits = (
+    #     (
+    #         -1.8973,  # -2.8973,
+    #         -1.0628,  # -1.7628,
+    #         -1.8973,  # -2.8973,
+    #         -2.0718,  # -3.0718,
+    #         -1.8973,  # -2.8973,
+    #         -0.0175,  # -0.0175,
+    #         -1.8973,  # -2.8973,
+    #     ),
+    # )
+    # upper_joint_limits = (
+    #     1.8973,  # 2.8973,
+    #     1.0628,  # 1.7628,
+    #     1.8973,  # 2.8973,
+    #     -0.0698,  # -0.0698,
+    #     1.8973,  # 2.8973,
+    #     2.7525,  # 3.7525,
+    #     1.8973,  # 2.8973,
+    # )
+
+    robot_obs = np.array(
+        [
+            0.02586889,  # x derived from joint angles
+            -0.2313129,  # y derived from joint angles
+            0.5712808,  # z derived from joint angles
+            3.09045411,  # theta_x derived from joint angles
+            -0.02908596,  # theta_y derived from joint angles
+            1.50013585,  # theta_z derived from joint angles
+            0.07999963,  # gripper width
+            -1.21779124,  # joint 0
+            1.03987629,  # joint 1
+            2.11978254,  # joint 2
+            -2.34205014,  # joint 3
+            -0.87015899,  # joint 4
+            1.64119093,  # joint 5
+            0.55344928,  # joint 6
+            1.0,  # gripper actionn
+        ]
+    )
+
+    # robot_joints = np.random.uniform(low=lower_joint_limits, high=upper_joint_limits)
+    # robot_obs[7:14] = robot_joints
+
+    robot_gripper_width = np.random.uniform(0.0, 0.08)
+    robot_obs[6] = robot_gripper_width
+
+    block_width = 0.04
+    block_rot_z_range = (pi / 2 - pi / 8, pi / 2 + pi / 8)
+    block_slider_left = np.array([-2.40851662e-01, 9.24044687e-02, 4.60990009e-01])
+    block_slider_right = np.array([7.03416330e-02, 9.24044687e-02, 4.60990009e-01])
+    block_table = [
+        np.array([5.00000896e-02, -1.20000177e-01, 4.59990009e-01]),
+        np.array([2.29995412e-01, -1.19995140e-01, 4.59990010e-01]),
+    ]
+    block_drawer_open = [
+        np.array([0.9170e-01, -2.7140e-01, 3.6213e-01]),
+        np.array([1.7130e-01, -2.5120e-01, 3.6213e-01]),
+    ]
+    block_drawer_closed = [
+        np.array([0.9090e-01, -1.0526e-01, 3.6213e-01]),
+        np.array([1.7170e-01, -1.1120e-01, 3.6213e-01]),
+    ]
+
+    drawer_idx = [0, 1]
+    random.shuffle(drawer_idx)
+
+    table_idx = [0, 1]
+    random.shuffle(table_idx)
+
+    if initial_condition["drawer"] == "open":
+        block_drawer = block_drawer_open
+    elif initial_condition["drawer"] == "closed":
+        block_drawer = block_drawer_closed
+
+    # we want to have a "deterministic" random seed for each initial condition
+    seed = zlib.adler32(str(initial_condition.values()).encode("utf-8"))
+    with temp_seed(seed):
+        np.random.shuffle(block_table)
+
+        scene_obs = np.zeros(24)
+        if initial_condition["slider"] == "left":
+            scene_obs[0] = 0.28
+        if initial_condition["drawer"] == "open":
+            scene_obs[1] = 0.22
+        if initial_condition["lightbulb"] == 1:
+            scene_obs[3] = 0.088
+        scene_obs[4] = initial_condition["lightbulb"]
+        scene_obs[5] = initial_condition["led"]
+
+        # red block
+        if initial_condition["red_block"] == "slider_right":
+            scene_obs[6:9] = block_slider_right
+        elif initial_condition["red_block"] == "slider_left":
+            scene_obs[6:9] = block_slider_left
+        elif initial_condition["red_block"] == "grasped":
+            scene_obs[6:9] = robot_obs[0:3]
+            robot_obs[6] = block_width
+        elif initial_condition["red_block"] == "drawer":
+            scene_obs[6:9] = block_drawer[drawer_idx.pop(0)]
+        elif initial_condition["red_block"] == "table":
+            scene_obs[6:9] = block_table[table_idx.pop(0)]
+        else:
+            raise ValueError("Unknown initial condition for red block")
+        # Orientation
+        if initial_condition["red_block"] == "grasped":
+            scene_obs[11] = 0.0
+        else:
+            scene_obs[11] = np.random.uniform(*block_rot_z_range)
+
+        # blue block
+        if initial_condition["blue_block"] == "slider_right":
+            scene_obs[12:15] = block_slider_right
+        elif initial_condition["blue_block"] == "slider_left":
+            scene_obs[12:15] = block_slider_left
+        elif initial_condition["blue_block"] == "grasped":
+            scene_obs[12:15] = robot_obs[0:3]
+            robot_obs[6] = block_width
+        elif initial_condition["blue_block"] == "drawer":
+            scene_obs[12:15] = block_drawer[drawer_idx.pop(0)]
+        elif initial_condition["blue_block"] == "table":
+            scene_obs[12:15] = block_table[table_idx.pop(0)]
+        else:
+            raise ValueError("Unknown initial condition for blue block")
+        # Orientation
+        if initial_condition["blue_block"] == "grasped":
+            scene_obs[17] = 0.0
+        else:
+            scene_obs[17] = np.random.uniform(*block_rot_z_range)
+
+        # pink block
+        if initial_condition["pink_block"] == "slider_right":
+            scene_obs[18:21] = block_slider_right
+        elif initial_condition["pink_block"] == "slider_left":
+            scene_obs[18:21] = block_slider_left
+        elif initial_condition["pink_block"] == "grasped":
+            scene_obs[18:21] = robot_obs[0:3]
+            robot_obs[6] = block_width
+        elif initial_condition["pink_block"] == "drawer":
+            scene_obs[18:21] = block_drawer[drawer_idx.pop(0)]
+        elif initial_condition["pink_block"] == "table":
+            scene_obs[18:21] = block_table[table_idx.pop(0)]
+        else:
+            raise ValueError("Unknown initial condition for pink block")
+        # Orientation
+        if initial_condition["pink_block"] == "grasped":
+            scene_obs[23] = 0.0
+        else:
+            scene_obs[23] = np.random.uniform(*block_rot_z_range)
 
     return robot_obs, scene_obs
