@@ -5,16 +5,15 @@ from typing import Any, Dict, Tuple, Union
 import gym
 import numpy as np
 import torch
-from calvin_agent.datasets.utils.episode_utils import (
-    process_depth,
-    process_rgb,
-    process_state,
-)
-
 from calvin.calvin_env.calvin_env.envs.play_table_env import get_env
 from calvin.calvin_env.calvin_env.utils.utils import (
     EglDeviceNotFoundError,
     get_egl_device_id,
+)
+from calvin_agent.datasets.utils.episode_utils import (
+    process_depth,
+    process_rgb,
+    process_state,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,8 +26,8 @@ class CalvinEnvWrapper(gym.Wrapper):
             dataset_loader.abs_datasets_dir,
             show_gui=show_gui,
             obs_space={
-                "rgb_obs": ["rgb_static", "rgb_gripper", "rgb_tactile"],
-                "depth_obs": ["depth_static", "depth_gripper", "depth_tactile"],
+                "rgb_obs": ["rgb_static", "rgb_gripper"], #, "rgb_tactile"],
+                "depth_obs": ["depth_static", "depth_gripper"], #, "depth_tactile"],
                 "state_obs": ["robot_obs", "scene_obs"],
                 "actions": ["actions"],
                 "language": ["language"],
@@ -49,7 +48,16 @@ class CalvinEnvWrapper(gym.Wrapper):
             logger.warning(
                 "Environment variable EGL_VISIBLE_DEVICES is already set. Is this intended?"
             )
-        cuda_id = device.index if device.type == "cuda" else 0
+        # cuda_id = device.index if device.type == "cuda" else 0
+
+        if device.type == "cuda":
+            cuda_id = (
+                device.index
+                if device.index is not None
+                else torch.cuda.current_device()
+            )
+        else:
+            cuda_id = 0  # Default to 0 if not a CUDA device
         try:
             egl_id = get_egl_device_id(cuda_id)
         except EglDeviceNotFoundError:
