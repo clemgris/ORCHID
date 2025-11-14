@@ -497,3 +497,159 @@ def get_random_env_state_for_initial_condition(initial_condition):
             scene_obs[23] = np.random.uniform(*block_rot_z_range)
 
     return robot_obs, scene_obs
+
+
+uids = {
+    "table": 5,
+    "block_blue": 3,
+    "block_pink": 4,
+    "block_red": 2,
+}
+
+
+def get_logic_state_from_state(info):
+    # Light states
+    logic_state = {
+        "led": info["scene_info"]["lights"]["led"]["logical_state"],
+        "lightbulb": info["scene_info"]["lights"]["lightbulb"]["logical_state"],
+    }
+
+    # Grasped blocks
+    robot_contacts = [c[2] for c in info["robot_info"]["contacts"]]
+    logic_state["grasped"] = 0
+    if uids["block_red"] in robot_contacts:
+        logic_state["red_block"] = "grasped"
+        logic_state["grasped"] = 1
+    elif uids["block_pink"] in robot_contacts:
+        logic_state["pink_block"] = "grasped"
+        logic_state["grasped"] = 1
+    elif uids["block_blue"] in robot_contacts:
+        logic_state["blue_block"] = "grasped"
+        logic_state["grasped"] = 1
+
+    # On table or slider
+    drawer_condition = (5, 3)
+    table_condition = (5, -1)
+    slider_condition = (5, 6)
+
+    block_blue_contacts = [
+        (c[2], c[4])
+        for c in info["scene_info"]["movable_objects"]["block_blue"]["contacts"]
+    ]
+    block_pink_contacts = [
+        (c[2], c[4])
+        for c in info["scene_info"]["movable_objects"]["block_pink"]["contacts"]
+    ]
+    block_red_contacts = [
+        (c[2], c[4])
+        for c in info["scene_info"]["movable_objects"]["block_red"]["contacts"]
+    ]
+
+    if "blue_block" not in logic_state:
+        # In drawer
+        if drawer_condition in block_blue_contacts:
+            logic_state["blue_block"] = "drawer"
+        # On table
+        elif table_condition in block_blue_contacts:
+            logic_state["blue_block"] = "table"
+        # In slider
+        elif slider_condition in block_blue_contacts:
+            logic_state["blue_block"] = (
+                "slider_left"
+                if info["scene_info"]["movable_objects"]["block_blue"]["current_pos"][0]
+                < -0.11
+                else "slider_right"
+            )
+        # Default on table
+        else:
+            logic_state["blue_block"] = "table"
+
+        # Stacked on another block
+        if (uids["block_red"], -1) in block_blue_contacts:
+            logic_state["blue_block"] = (
+                "stacked_top"
+                if info["scene_info"]["movable_objects"]["block_blue"]["current_pos"][2]
+                > info["scene_info"]["movable_objects"]["block_red"]["current_pos"][2]
+                else "stacked_bottom"
+            )
+        elif (uids["block_pink"], -1) in block_blue_contacts:
+            logic_state["blue_block"] = (
+                "stacked_top"
+                if info["scene_info"]["movable_objects"]["block_blue"]["current_pos"][2]
+                > info["scene_info"]["movable_objects"]["block_pink"]["current_pos"][2]
+                else "stacked_bottom"
+            )
+
+    if "pink_block" not in logic_state:
+        if drawer_condition in block_pink_contacts:
+            logic_state["pink_block"] = "drawer"
+        elif table_condition in block_pink_contacts:
+            logic_state["pink_block"] = "table"
+        elif slider_condition in block_pink_contacts:
+            logic_state["pink_block"] = (
+                "slider_left"
+                if info["scene_info"]["movable_objects"]["block_pink"]["current_pos"][0]
+                < -0.11
+                else "slider_right"
+            )
+        else:
+            logic_state["pink_block"] = "table"
+        # Stacked on another block
+        if (uids["block_red"], -1) in block_pink_contacts:
+            logic_state["pink_block"] = (
+                "stacked_top"
+                if info["scene_info"]["movable_objects"]["block_pink"]["current_pos"][2]
+                > info["scene_info"]["movable_objects"]["block_red"]["current_pos"][2]
+                else "stacked_bottom"
+            )
+        elif (uids["block_blue"], -1) in block_pink_contacts:
+            logic_state["pink_block"] = (
+                "stacked_top"
+                if info["scene_info"]["movable_objects"]["block_pink"]["current_pos"][2]
+                > info["scene_info"]["movable_objects"]["block_blue"]["current_pos"][2]
+                else "stacked_bottom"
+            )
+
+    if "red_block" not in logic_state:
+        if drawer_condition in block_red_contacts:
+            logic_state["red_block"] = "drawer"
+        elif table_condition in block_red_contacts:
+            logic_state["red_block"] = "table"
+        elif slider_condition in block_red_contacts:
+            logic_state["red_block"] = (
+                "slider_left"
+                if info["scene_info"]["movable_objects"]["block_red"]["current_pos"][0]
+                < -0.11
+                else "slider_right"
+            )
+        else:
+            logic_state["red_block"] = "table"
+
+        # Stacked on another block
+        if (uids["block_blue"], -1) in block_red_contacts:
+            logic_state["red_block"] = (
+                "stacked_top"
+                if info["scene_info"]["movable_objects"]["block_red"]["current_pos"][2]
+                > info["scene_info"]["movable_objects"]["block_blue"]["current_pos"][2]
+                else "stacked_bottom"
+            )
+        elif (uids["block_pink"], -1) in block_red_contacts:
+            logic_state["red_block"] = (
+                "stacked_top"
+                if info["scene_info"]["movable_objects"]["block_red"]["current_pos"][2]
+                > info["scene_info"]["movable_objects"]["block_pink"]["current_pos"][2]
+                else "stacked_bottom"
+            )
+
+    # Open/closed doors
+    logic_state["slider"] = (
+        "left"
+        if info["scene_info"]["doors"]["base__slide"]["current_state"] > 0.14
+        else "right"
+    )
+    logic_state["drawer"] = (
+        "closed"
+        if info["scene_info"]["doors"]["base__drawer"]["current_state"] < 0.11
+        else "open"
+    )
+    return logic_state
