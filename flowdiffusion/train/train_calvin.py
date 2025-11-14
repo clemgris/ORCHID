@@ -226,7 +226,7 @@ def main(args):
         text_encoder = CLIPTextModel.from_pretrained(text_pretrained_model)
         text_embed_dim = 512
         amp = True
-        precision = "fp16"
+        precision = "bf16" if args.server == "jz" else "fp16"
 
     elif args.text_encoder == "Flan-t5":
         if args.server == "jz":
@@ -250,7 +250,7 @@ def main(args):
         text_encoder = SiglipTextModel.from_pretrained(text_pretrained_model)
         text_embed_dim = 768
         amp = True
-        precision = "fp16"
+        precision = "bf16" if args.server == "jz" else "fp16"
 
     text_encoder = text_encoder.to(device)
     text_encoder.requires_grad_(False)
