@@ -75,7 +75,7 @@ class HierarchicalModel(CalvinBaseModel):
         # High level
         self.replan = cfg.replan
         self.ref_traj_length = 64
-        self.guidance_weight = 3
+        self.guidance_weight = getattr(cfg.high_level, "guidance", 3)
         self.sample_subgoals_every = 8
 
         self.use_oracle_subgoals = cfg.high_level.use_oracle_subgoals
