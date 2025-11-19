@@ -714,7 +714,7 @@ class GoalGaussianDiffusion(nn.Module):
         return_all_timesteps=False,
         guidance_weight=0,
         return_log_probs=False,
-        deterministic_last=None
+        deterministic_last=None,
     ):
         batch, device = shape[0], self.betas.device
 
@@ -755,7 +755,7 @@ class GoalGaussianDiffusion(nn.Module):
         return_all_timesteps=False,
         guidance_weight=0,
         return_log_probs=False,
-        deterministic_last=True
+        deterministic_last=True,
     ):
         batch, device, total_timesteps, sampling_timesteps, eta, objective = (
             shape[0],
@@ -781,7 +781,9 @@ class GoalGaussianDiffusion(nn.Module):
         log_probs = []
         is_last = False
 
-        for time, time_next in tqdm(time_pairs, desc="sampling loop time step", leave=False):
+        for time, time_next in tqdm(
+            time_pairs, desc="sampling loop time step", leave=False
+        ):
             time_cond = torch.full((batch,), time, device=device, dtype=torch.long)
             # self_cond = x_start if self.self_condition else None
             pred_noise, x_start, *_ = self.model_predictions(
@@ -813,7 +815,7 @@ class GoalGaussianDiffusion(nn.Module):
                 img = img_mean + sigma * noise
                 if return_log_probs:
                     log_prob = (
-                        - ((img.detach() - img_mean) ** 2) / (2 * (sigma**2)) 
+                        -((img.detach() - img_mean) ** 2) / (2 * (sigma**2))
                         - torch.log(sigma)
                         - torch.log(torch.sqrt(2 * torch.as_tensor(math.pi)))
                     )
@@ -842,7 +844,7 @@ class GoalGaussianDiffusion(nn.Module):
         return_all_timesteps=False,
         guidance_weight=0,
         return_log_probs=False,
-        deterministic_last=False
+        deterministic_last=False,
     ):
         image_size, channels = self.image_size, self.channels
         sample_fn = (
@@ -855,7 +857,7 @@ class GoalGaussianDiffusion(nn.Module):
             return_all_timesteps=return_all_timesteps,
             guidance_weight=guidance_weight,
             return_log_probs=return_log_probs,
-            deterministic_last=deterministic_last
+            deterministic_last=deterministic_last,
         )
 
     @torch.no_grad()
@@ -1177,9 +1179,9 @@ class Trainer(object):
         batch_text_ids = self.tokenizer(
             batch_text,
             return_tensors="pt",
-            padding=True,
+            padding="max_length", # True
             truncation=True,
-            max_length=128,
+            max_length=14, #128,
         ).to(self.device)
         batch_text_embed = self.text_encoder(**batch_text_ids).last_hidden_state
         return batch_text_embed
