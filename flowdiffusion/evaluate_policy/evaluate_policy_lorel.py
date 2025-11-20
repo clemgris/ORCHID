@@ -24,7 +24,7 @@ from termcolor import colored
 from tqdm import trange
 from utils.vis import save_gif
 
-NUM_EPISODES_PER_TASK = 100
+NUM_EPISODES_PER_TASK = 10
 MAX_STEPS = 20
 
 
@@ -114,21 +114,21 @@ def evaluate_policy(env, model, eval_folder, debug_path, args):
             tot_tasks[task] += 1
             print(f"{task}: {results[task]} / {tot_tasks[task]} ({length})")
 
-        print("\nResults\n" + "-" * 60)
+    print("\nResults\n" + "-" * 60)
+    for task in results:
+        print(f"{task}: {results[task]} / {tot_tasks[task]}")
+
+    print(f"SR: {sum(results.values()) / sum(tot_tasks.values()) * 100:.1f}%")
+
+    # Save results
+    with open(
+        os.path.join(args.eval_folder, f"results.txt"), "w"
+    ) as f:
         for task in results:
-            print(f"{task}: {results[task]} / {tot_tasks[task]}")
-
-        print(f"SR: {sum(results.values()) / sum(tot_tasks.values()) * 100:.1f}%")
-
-        # Save results
-        with open(
-            os.path.join(args.eval_folder, f"results_{args.test_on}.txt"), "w"
-        ) as f:
-            for task in results:
-                f.write(f"{task}: {results[task]} / {tot_tasks[task]}\n")
-            f.write(
-                f"SR: {sum(results.values()) / sum(tot_tasks.values()) * 100:.1f}%\n"
-            )
+            f.write(f"{task}: {results[task]} / {tot_tasks[task]}\n")
+        f.write(
+            f"SR: {sum(results.values()) / sum(tot_tasks.values()) * 100:.1f}%\n"
+        )
 
 
 def rollout(env, task, model, debug_path):
@@ -138,18 +138,18 @@ def rollout(env, task, model, debug_path):
     subgoals = []
     im = env.reset()
     im = im[0]
+    initial_im = im.copy()
 
     ## DEBUG
-    path = "/home/grislain/SkillDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_1k/training/data_with_dino_vit_features/data_0.npz"
-    episode = np.load(path, allow_pickle=True)
+    # path = "/home/grislain/SkillDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_1k/training/data_with_dino_vit_features/data_0.npz"
+    # episode = np.load(path, allow_pickle=True)
     ## DEBUG
-    breakpoint()
 
     while not done:
         # Reset environment
         st0 = env.unwrapped.data.qpos[:].copy()
         action = model.step(im, task).cpu().numpy()
-        action = episode["actions"][step]  # DEBUG
+        # action = episode["actions"][step]  # DEBUG
 
         obs_list.append(torch.Tensor(im).permute(2, 0, 1))
         if args.save_failures and hasattr(model, "sub_goals"):
@@ -195,7 +195,9 @@ def rollout(env, task, model, debug_path):
             #     os.path.join(failed_episode_path, f"subgoals_{kk}.png"),
             # )
             torchvision.utils.save_image(
-                (subgoal + 1) / 2,
+                torch.concatenate(
+                    [torch.Tensor(initial_im).permute(2, 0, 1)[None], (subgoal + 1) / 2]
+                ),
                 os.path.join(failed_episode_path, f"subgoals_{kk}.png"),
             )
         # Save episode (as gif)
@@ -273,7 +275,7 @@ if __name__ == "__main__":
         "--debug_path",
         type=str,
         help="Path to save debug images.",
-        default="/home/grislain/AVDC/debug_sequential",
+        default="/home/grislain/AVDC/debug_eval_lorel",
     )
 
     parser.add_argument(
@@ -286,7 +288,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--replan",
         action="store_true",
-        help="Replan subgoals every 64 steps.",
+        help="Replan subgoals every n steps.",
     )
 
     parser.add_argument("--device", default=0, type=int, help="CUDA device")
