@@ -202,10 +202,10 @@ def rollout_data_collection(
             "scene_obs": obs["raw_obs"]["scene_obs"],
             "rgb_static": obs["raw_obs"]["rgb_obs"]["rgb_static"],
             "rgb_gripper": obs["raw_obs"]["rgb_obs"]["rgb_gripper"],
-            "rgb_tactile": obs["raw_obs"]["rgb_obs"]["rgb_tactile"],
+            # "rgb_tactile": obs["raw_obs"]["rgb_obs"]["rgb_tactile"],
             "depth_static": obs["raw_obs"]["depth_obs"]["depth_static"],
             "depth_gripper": obs["raw_obs"]["depth_obs"]["depth_gripper"],
-            "depth_tactile": obs["raw_obs"]["depth_obs"]["depth_tactile"],
+            # "depth_tactile": obs["raw_obs"]["depth_obs"]["depth_tactile"],
         }
         frames.append(frame)
         obs, _, _, current_info = env.step(action)
@@ -227,24 +227,39 @@ def rollout_data_collection(
                 np.savez(frame_path, **frame)
 
             print(colored("S", "green"), end=" ")
-            success_path = os.path.join(saving_path, "successes")
-            os.makedirs(success_path, exist_ok=True)
-            success_idx = len(os.listdir(success_path))
-            save_gif(
-                obs_list,
-                os.path.join(success_path, f"trajectory_{subtask}_{success_idx}.gif"),
-                duration=1.0,
-            )
+            if debug_path is not None:
+                success_path = os.path.join(debug_path, "successes")
+                os.makedirs(success_path, exist_ok=True)
+                success_idx = len(os.listdir(success_path))
+                save_gif(
+                    obs_list,
+                    os.path.join(
+                        success_path, f"trajectory_{subtask}_{success_idx}.gif"
+                    ),
+                    duration=1.0,
+                )
 
-            return True, step, (frame_idx + 1, idx), lang_annotation
+            return True, step, (max(frame_idx + 1, idx - 64), idx), lang_annotation
 
     print(colored("F", "red"), end=" ")
-    failures_path = os.path.join(saving_path, "failures")
-    os.makedirs(failures_path, exist_ok=True)
-    failure_idx = len(os.listdir(failures_path))
-    save_gif(
-        obs_list,
-        os.path.join(failures_path, f"trajectory_{subtask}_{failure_idx}.gif"),
-        duration=1.0,
-    )
+    if debug_path is not None:
+        failures_path = os.path.join(debug_path, "failures")
+        os.makedirs(failures_path, exist_ok=True)
+        failure_idx = len(os.listdir(failures_path))
+        os.makedirs(os.path.join(failures_path, f"failed_{failure_idx}"), exist_ok=True)
+        save_gif(
+            obs_list,
+            os.path.join(
+                failures_path, f"failed_{failure_idx}/trajectory_{subtask}.gif"
+            ),
+            duration=1.0,
+        )
+        gen_subgoals = model.sub_goals[0, :, 0]
+        torchvision.utils.save_image(
+            (gen_subgoals.reshape(8, 3, 96, 96) + 1) / 2,
+            os.path.join(
+                failures_path,
+                f"failed_{failure_idx}/subgoals_{subtask}.png",
+            ),
+        )
     return False, step, (0, 0), None
