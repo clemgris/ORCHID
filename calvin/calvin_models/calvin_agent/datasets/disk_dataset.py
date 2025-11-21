@@ -191,7 +191,7 @@ class DiskDiffusionDataset(BaseDataset):
         lang_task = lang_data["language"]["task"]  # length total number of annotations
         lang_lookup = []
         for i, (start_idx, end_idx) in enumerate(ep_start_end_ids):
-            assert end_idx >= self.max_window_size
+            assert end_idx >= self.min_window_size
             lang_lookup.append(i)
             episode_lookup.append((start_idx, end_idx))
 
@@ -529,7 +529,7 @@ class DiskImageDataset(BaseDataset):
         lang_task = lang_data["language"]["task"]
         lang_lookup = []
         for i, (start_idx, end_idx) in enumerate(ep_start_end_ids):
-            assert end_idx >= self.max_window_size
+            assert end_idx >= self.min_window_size
             lang_lookup.append(i)
             episode_lookup.append((start_idx, end_idx))
 
@@ -680,7 +680,7 @@ class DiskActionDataset(BaseDataset):
 
         num_frames = end_idx - start_idx + 1
         chunk_size = random.randint(
-            int(np.ceil(self.min_window_size / self.num_subgoals)),
+            int(np.ceil(min(self.min_window_size, num_frames) / self.num_subgoals)),
             int(np.ceil(num_frames / self.num_subgoals)),
         )
 
@@ -755,7 +755,6 @@ class DiskActionDataset(BaseDataset):
         lang_task = lang_data["language"]["task"]  # length total number of annotations
         lang_lookup = []
         for i, (start_idx, end_idx) in enumerate(ep_start_end_ids):
-            assert end_idx >= self.max_window_size
             num_frames = end_idx - start_idx + 1
             chunk_size = int(np.ceil(num_frames / self.num_subgoals))
             for j in range(0, max(1, num_frames - chunk_size)):
