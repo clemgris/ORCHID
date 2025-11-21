@@ -59,7 +59,7 @@ def make_env(dataset_path):
 if __name__ == "__main__":
     seed_everything(0, workers=True)  # type:ignore
     parser = argparse.ArgumentParser(
-        description="Evaluate a trained model on multistep sequences with language goals."
+        description="Generate new data using a pretrained hierarchical CALVIN model"
     )
 
     parser.add_argument(
@@ -135,6 +135,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--task",
         type=str,
+        nargs="+",
         help="Task to generate data for.",
         default=None,
     )
@@ -144,6 +145,27 @@ if __name__ == "__main__":
         type=int,
         help="Number of trials per data point.",
         default=1,
+    )
+
+    parser.add_argument(
+        "--start_idx",
+        type=int,
+        help="Starting index for saving data.",
+        default=0,
+    )
+
+    parser.add_argument(
+        "--buffer_mode",
+        type=str,
+        help="Buffer of initial states",
+        choices=[
+            "start",
+            "start_end_all",
+            "start_all",
+            "episodes",
+            "start_end_others",
+            "end_all",
+        ],
     )
 
     parser.add_argument("--device", default=0, type=int, help="CUDA device")
@@ -242,11 +264,11 @@ if __name__ == "__main__":
     ) as f:
         OmegaConf.save(config, f)
 
-    for subdir in ["training"]:
-        os.makedirs(os.path.join(saving_path, subdir), exist_ok=True)
-        os.makedirs(
-            os.path.join(saving_path, subdir, "lang_annotations"), exist_ok=True
-        )
+    os.makedirs(os.path.join(saving_path, f"training_{args.start_idx}"), exist_ok=True)
+    os.makedirs(
+        os.path.join(saving_path, f"training_{args.start_idx}", "lang_annotations"),
+        exist_ok=True,
+    )
 
     transforms_dict = {
         "pixel": image_transforms_dict,
@@ -260,7 +282,7 @@ if __name__ == "__main__":
     # Initialize state buffer
     buffer = StateBuffer(tasks.keys(), max_size=1e6)
     buffer_save_path = os.path.join(
-        policy_dataset.abs_datasets_dir, "state_buffer_start_end_all_balanced.pkl"
+        policy_dataset.abs_datasets_dir, f"state_buffer_{args.buffer_mode}.pkl"
     )
     print("Buffer load path:", buffer_save_path)
     buffer.load(buffer_save_path)
@@ -269,7 +291,7 @@ if __name__ == "__main__":
 
     model = HierarchicalModel(config, transforms_dict)
 
-    if args.task is not None:
+    if args.task is None:
         for task in tqdm(tasks.keys()):
             generate_new_data(
                 model,
@@ -278,22 +300,25 @@ if __name__ == "__main__":
                 conf_dir=conf_dir,
                 num_data=args.num_data,
                 task=task,
-                saving_path=os.path.join(saving_path, "training"),
-                num_trials=1,
+                saving_path=os.path.join(saving_path, f"training_{args.start_idx}"),
+                num_trials=args.num_trials,
                 state_buffer=buffer,
+                start_idx=args.start_idx,
             )
     else:
-        generate_new_data(
-            model,
-            env,
-            debug_path=args.debug_path,
-            conf_dir=conf_dir,
-            num_data=args.num_data,
-            task=args.task,
-            saving_path=os.path.join(saving_path, "training"),
-            num_trials=args.num_trials,
-            state_buffer=buffer,
-        )
+        for task in args.task:
+            generate_new_data(
+                model,
+                env,
+                debug_path=args.debug_path,
+                conf_dir=conf_dir,
+                num_data=args.num_data,
+                task=task,
+                saving_path=os.path.join(saving_path, f"training_{args.start_idx}"),
+                num_trials=args.num_trials,
+                state_buffer=buffer,
+                start_idx=args.start_idx,
+            )
 
     shutil.copytree(
         os.path.join(policy_data_config.root, "training", ".hydra"),
@@ -309,11 +334,17 @@ if __name__ == "__main__":
 
     # Copy from training to validation as a placeholder
     shutil.copy2(
-        os.path.join(saving_path, "training", "episode_0000001.npz"),
-        os.path.join(saving_path, "validation", "episode_0000001.npz"),
+        os.path.join(
+            saving_path,
+            f"training_{args.start_idx}",
+            f"episode_{(args.start_idx + 1):07d}.npz",
+        ),
+        os.path.join(
+            saving_path, "validation", f"episode_{(args.start_idx + 1):07d}.npz"
+        ),
     )
     shutil.copytree(
-        os.path.join(saving_path, "training", "lang_annotations"),
+        os.path.join(saving_path, f"training_{args.start_idx}", "lang_annotations"),
         os.path.join(saving_path, "validation", "lang_annotations"),
         dirs_exist_ok=True,
     )

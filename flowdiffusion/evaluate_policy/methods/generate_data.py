@@ -48,6 +48,7 @@ def generate_new_data(
     saving_path: str = None,
     num_trials: int = 1,
     state_buffer: StateBuffer = None,
+    start_idx: int = 0,
 ):
     """
     Run this function to evaluate a model on the CALVIN challenge.
@@ -88,6 +89,7 @@ def generate_new_data(
                 all_annotations,
                 debug_path,
                 saving_path,
+                start_idx,
             )
             num_trial += 1
             if success:

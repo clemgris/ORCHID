@@ -173,7 +173,7 @@ def rollout(env, model, task_oracle, subtask, val_annotations, debug_path=None):
 
 
 def rollout_data_collection(
-    env, model, task_oracle, subtask, annotations, debug_path=None, saving_path=None
+    env, model, task_oracle, subtask, annotations, debug_path=None, saving_path=None, start_idx=0
 ):
     """
     Run the actual rollout on one subtask (which is one natural language instruction).
@@ -192,7 +192,7 @@ def rollout_data_collection(
             1
             for f in os.listdir(saving_path)
             if f.startswith("episode_") and os.path.isfile(f"{saving_path}/{f}")
-        )
+        ) + start_idx
 
         action = model.step(obs, lang_annotation)
         frame = {
