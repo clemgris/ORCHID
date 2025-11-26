@@ -70,10 +70,16 @@ def generate_new_data(
     all_annotations = OmegaConf.load(conf_dir / "annotations/new_playtable.yaml")
 
     results = []
-    auto_lang_ann = {
-        "info": {"episodes": [], "indx": [], "length": [], "num_trials": []},
-        "language": {"ann": [], "task": []},
-    }
+    ann_saving_path = os.path.join(saving_path, "lang_annotations/auto_lang_ann.npy")
+    if not os.path.exists(os.path.dirname(ann_saving_path)):
+        auto_lang_ann = {
+            "info": {"episodes": [], "indx": [], "length": [], "num_trials": []},
+            "language": {"ann": [], "task": []},
+        }
+        os.makedirs(os.path.dirname(ann_saving_path), exist_ok=False)
+    else:
+        auto_lang_ann = np.load(ann_saving_path, allow_pickle=True).item()
+
     success_counter = 0
     suffled_idx = np.random.permutation(len(state_buffer.valid_idx[task]))
     for ii in suffled_idx:
@@ -108,9 +114,6 @@ def generate_new_data(
             if success_counter % 5 == 0:
                 print("Saved", success_counter, "episodes for the task", task)
                 # Save language annotations
-                ann_saving_path = os.path.join(
-                    saving_path, "lang_annotations/auto_lang_ann.npy"
-                )
                 np.save(
                     ann_saving_path,
                     auto_lang_ann,
