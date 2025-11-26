@@ -138,6 +138,13 @@ if __name__ == "__main__":
         help="Policy model to use.",
     )
 
+    parser.add_argument(
+        "--high_level_guidance",
+        type=int,
+        default=3,
+        help="Guidance in high-level diffusion.",
+    )
+
     parser.add_argument("--device", default=0, type=int, help="CUDA device")
     args = parser.parse_args()
     args.save_failures = args.debug_path is not None
@@ -222,6 +229,7 @@ if __name__ == "__main__":
                 **high_level_data_config,
                 "sampling_timesteps": args.high_level_sampling_timesteps,
                 "ddim_sampling_eta": args.high_level_ddim_eta,
+                "guidance": args.high_level_guidance,
             },
             "debug_path": args.debug_path,
             "server": args.server,
