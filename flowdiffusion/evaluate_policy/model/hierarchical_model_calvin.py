@@ -264,7 +264,7 @@ class HierarchicalModel(CalvinBaseModel):
         )
 
         if cfg.high_level.checkpoint_num is not None:
-            trainer.load(cfg.high_level.checkpoint_num)
+            trainer.load(cfg.high_level.results_folder, cfg.high_level.checkpoint_num)
 
         self.high_level = trainer
 
