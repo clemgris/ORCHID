@@ -66,7 +66,7 @@ if __name__ == "__main__":
     training_folders = list(saving_path.glob("training_*"))
 
     auto_lang_ann = {
-        "info": {"episodes": [], "indx": [], "length": []},
+        "info": {"episodes": [], "indx": [], "length": [], "num_trials": []},
         "language": {"ann": [], "task": []},
     }
 

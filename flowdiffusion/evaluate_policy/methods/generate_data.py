@@ -71,11 +71,12 @@ def generate_new_data(
 
     results = []
     auto_lang_ann = {
-        "info": {"episodes": [], "indx": [], "length": []},
+        "info": {"episodes": [], "indx": [], "length": [], "num_trials": []},
         "language": {"ann": [], "task": []},
     }
     success_counter = 0
-    for ii in range(len(state_buffer.valid_idx[task])):
+    suffled_idx = np.random.permutation(len(state_buffer.valid_idx[task]))
+    for ii in suffled_idx:
         _, robot_obs, scene_obs = state_buffer.get(task, ii)
         done = False
         num_trial = 0
@@ -100,6 +101,7 @@ def generate_new_data(
                 auto_lang_ann["language"]["ann"].append(ann)
                 auto_lang_ann["language"]["task"].append(task)
                 auto_lang_ann["info"]["length"].append(length)
+                auto_lang_ann["info"]["num_trials"].append(num_trial)
 
                 done = True
 
