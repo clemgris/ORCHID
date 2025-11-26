@@ -51,7 +51,8 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 def main(args):
     results_folder = args.results_folder
-    data_path = args.data_path
+    ft_data_path = args.ft_data_path
+    pretrained_results_folder = Path(args.pretrained_results_folder)
 
     if args.diffuse_on != "pixel":
         diffuse_on = f"{args.diffuse_on}_{args.feat_patch_size}"
@@ -60,7 +61,7 @@ def main(args):
 
     cfg = DictConfig(
         {
-            "root": data_path,
+            "root": ft_data_path,
             "datamodule": {
                 "lang_dataset": {
                     "_target_": "calvin_agent.datasets.disk_dataset.DiskDiffusionDataset",
@@ -163,13 +164,14 @@ def main(args):
         print("Results folder:", results_folder)
 
     if args.checkpoint_num is None:
-        with open(os.path.join(results_folder, "data_config.yaml"), "w") as file:
-            file.write(OmegaConf.to_yaml(cfg))
+        raise ValueError("Must provide a pretrained model to finetune from.")
     else:
         # Load checkpoint config
-        allowed_mismatch = ["train_num_steps"]
+        allowed_mismatch = ["train_num_steps", "root", "datamodule"]
         mismatching_keys = []
-        with open(os.path.join(results_folder, "data_config.yaml"), "r") as file:
+        with open(
+            os.path.join(pretrained_results_folder, "data_config.yaml"), "r"
+        ) as file:
             checkpoint_cfg = OmegaConf.load(file)
         for key in cfg.keys():
             if key not in checkpoint_cfg:
@@ -180,6 +182,7 @@ def main(args):
                     f"Key {key} has different value in checkpoint config {checkpoint_cfg[key]} != {cfg[key]}"
                 )
                 mismatching_keys.append(key)
+
         assert all(key in allowed_mismatch for key in mismatching_keys), (
             f"Keys {mismatching_keys} are not in the allowed mismatch list {allowed_mismatch}"
         )
@@ -188,7 +191,7 @@ def main(args):
         valid_n = 0
     else:
         train_set = data_module.train_datasets["lang"]
-        valid_set = data_module.val_datasets["lang"]
+        valid_set = train_set
         valid_n = 1
 
         print("Train data:", len(train_set))
@@ -327,7 +330,8 @@ def main(args):
         train_set=train_set,
         valid_set=valid_set,
         train_lr=1e-4,
-        train_num_steps=cfg.train_num_steps,
+        train_num_steps=cfg.train_num_steps
+        + args.checkpoint_num * cfg.save_and_sample_every,
         save_and_sample_every=cfg.save_and_sample_every,
         ema_update_every=10,
         ema_decay=0.999,
@@ -348,7 +352,7 @@ def main(args):
 
     if args.checkpoint_num is not None:
         print("Continuing training from checkpoint", args.checkpoint_num)
-        trainer.load(args.results_folder, args.checkpoint_num)
+        trainer.load(pretrained_results_folder, args.checkpoint_num)
 
     if args.mode == "train":
         trainer.train()
@@ -557,6 +561,12 @@ if __name__ == "__main__":
         "-c", "--checkpoint_num", type=int, default=None
     )  # set to checkpoint number to resume training or generate samples
     parser.add_argument(
+        "--pretrained_results_folder",
+        type=str,
+        help="Path to pretrained model results folder.",
+        default=None,
+    )  # set to pretrained model results folder
+    parser.add_argument(
         "-p", "--inference_path", type=str, default=None
     )  # set to get initial image
     parser.add_argument(
@@ -589,15 +599,15 @@ if __name__ == "__main__":
         default=None,  # "/home/grislain/AVDC/calvin/models/decoder/decoder_model_48.pth",
     )  # set to decoder checkpoint path
     parser.add_argument(
-        "--data_path",
+        "--ft_data_path",
         type=str,
         default="/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset",
-    )  # set to data path
+    )  # set to finetuning data path
     parser.add_argument(
         "--train_num_steps", type=int, default=150000
     )  # set to number of training steps
     parser.add_argument(
-        "--batch_size", type=int, default=16
+        "--batch_size", type=int, default=8
     )  # set to batch size for training
     parser.add_argument(
         "--min_batch_size", type=int, default=8

@@ -71,7 +71,6 @@ def temporal_shuffle_batch(batch, max_k, p):
     for b in range(B):
         k = torch.randint(1, max_k + 1, (1,)).item()
         idx = k_swaps_perm(T, k, p)
-        print(idx)
         out[b] = batch[b, idx]
     return out
 
@@ -907,19 +906,22 @@ class GoalGaussianDiffusion(nn.Module):
         x = self.q_sample(x_start=x_start, t=t, noise=noise)
 
         # Preprocess temp swaps
-        x_prepost = rearrange(
-            x,
-            "b (t c) h w -> b t c h w",
-            t=self.num_subgoals,
-            c=self.channels // self.num_subgoals,
-        )
-        x_prepost = temporal_shuffle_batch(
-            x_prepost, self.num_swaps, self.prob_temp_swaps
-        )
-        x_prepost = rearrange(
-            x_prepost,
-            "b t c h w -> b (t c) h w",
-        )
+        if self.prob_temp_swaps > 0.0:
+            x_prepost = rearrange(
+                x,
+                "b (t c) h w -> b t c h w",
+                t=self.num_subgoals,
+                c=self.channels // self.num_subgoals,
+            )
+            x_prepost = temporal_shuffle_batch(
+                x_prepost, self.num_swaps, self.prob_temp_swaps
+            )
+            x_prepost = rearrange(
+                x_prepost,
+                "b t c h w -> b (t c) h w",
+            )
+        else:
+            x_prepost = x
 
         # predict and take gradient step
         model_out = self.model(torch.cat([x_prepost, x_cond], dim=1), t, task_embed)
@@ -1148,17 +1150,15 @@ class Trainer(object):
         if os.path.exists(model_path):
             os.remove(model_path)
 
-    def load(self, milestone):
+    def load(self, folder, milestone):
         accelerator = self.accelerator
         device = accelerator.device
 
         print(
             "Downloading checkpoint from:",
-            str(self.results_folder / f"model-{milestone}.pt"),
+            str(folder / f"model-{milestone}.pt"),
         )
-        data = torch.load(
-            str(self.results_folder / f"model-{milestone}.pt"), map_location=device
-        )
+        data = torch.load(str(folder / f"model-{milestone}.pt"), map_location=device)
 
         model = self.accelerator.unwrap_model(self.model)
         model.load_state_dict(data["model"])
@@ -1179,9 +1179,9 @@ class Trainer(object):
         batch_text_ids = self.tokenizer(
             batch_text,
             return_tensors="pt",
-            padding="max_length", # True
+            padding="max_length",  # True
             truncation=True,
-            max_length=14, #128,
+            max_length=14,  # 128,
         ).to(self.device)
         batch_text_embed = self.text_encoder(**batch_text_ids).last_hidden_state
         return batch_text_embed
