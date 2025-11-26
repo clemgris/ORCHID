@@ -1153,6 +1153,7 @@ class Trainer(object):
     def load(self, folder, milestone):
         accelerator = self.accelerator
         device = accelerator.device
+        folder = Path(folder)
 
         print(
             "Downloading checkpoint from:",
