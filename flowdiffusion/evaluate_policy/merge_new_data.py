@@ -77,11 +77,11 @@ if __name__ == "__main__":
         for keys in auto_lang_ann.keys():
             for sub_keys in auto_lang_ann[keys].keys():
                 auto_lang_ann[keys][sub_keys].extend(ann[keys][sub_keys])
-        # Delete lang_annotation folder
-        lang_folder = folder / "lang_annotations"
-        for file in lang_folder.iterdir():
-            file.unlink()
-        lang_folder.rmdir()
+        # # Delete lang_annotation folder
+        # lang_folder = folder / "lang_annotations"
+        # for file in lang_folder.iterdir():
+        #     file.unlink()
+        # lang_folder.rmdir()
 
     # Assert no overlap in episode indices
     all_start_end = auto_lang_ann["info"]["indx"]
@@ -107,4 +107,4 @@ if __name__ == "__main__":
         for file in episode_files:
             new_path = saving_path / "training" / file.name
             file.rename(new_path)
-        folder.rmdir()
+        # folder.rmdir()
