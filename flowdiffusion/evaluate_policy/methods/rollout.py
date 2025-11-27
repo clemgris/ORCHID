@@ -173,7 +173,14 @@ def rollout(env, model, task_oracle, subtask, val_annotations, debug_path=None):
 
 
 def rollout_data_collection(
-    env, model, task_oracle, subtask, annotations, debug_path=None, saving_path=None, start_idx=0
+    env,
+    model,
+    task_oracle,
+    subtask,
+    annotations,
+    debug_path=None,
+    saving_path=None,
+    start_idx=0,
 ):
     """
     Run the actual rollout on one subtask (which is one natural language instruction).
@@ -186,14 +193,16 @@ def rollout_data_collection(
 
     frames = []
     obs_list = []
-    for step in range(70):
-        # Count the number of frames in the saving folder
-        frame_idx = sum(
+    # Count the number of frames in the saving folder
+    frame_idx = (
+        sum(
             1
             for f in os.listdir(saving_path)
             if f.startswith("episode_") and os.path.isfile(f"{saving_path}/{f}")
-        ) + start_idx
-
+        )
+        + start_idx
+    )
+    for step in range(70):
         action = model.step(obs, lang_annotation)
         frame = {
             "actions": action.detach().cpu().numpy(),
@@ -202,20 +211,36 @@ def rollout_data_collection(
             "scene_obs": obs["raw_obs"]["scene_obs"],
             "rgb_static": obs["raw_obs"]["rgb_obs"]["rgb_static"],
             "rgb_gripper": obs["raw_obs"]["rgb_obs"]["rgb_gripper"],
-            # "rgb_tactile": obs["raw_obs"]["rgb_obs"]["rgb_tactile"],
             "depth_static": obs["raw_obs"]["depth_obs"]["depth_static"],
             "depth_gripper": obs["raw_obs"]["depth_obs"]["depth_gripper"],
-            # "depth_tactile": obs["raw_obs"]["depth_obs"]["depth_tactile"],
         }
         frames.append(frame)
+
+        # Take a step in the environment
         obs, _, _, current_info = env.step(action)
         obs_list.append(obs["rgb_obs"]["rgb_static"][0, 0])
 
-        # check if current step solves a task
+        # Check if current step solves a task
         current_task_info = task_oracle.get_task_info_for_set(
             start_info, current_info, {subtask}
         )
+
+        # If solved, save the frames and return
         if len(current_task_info) > 0:
+            # Last frame
+            action = model.step(obs, lang_annotation)  # last action, not executed
+            frame = {
+                "actions": action.detach().cpu().numpy(),
+                "rel_actions": None,
+                "robot_obs": obs["raw_obs"]["robot_obs"],
+                "scene_obs": obs["raw_obs"]["scene_obs"],
+                "rgb_static": obs["raw_obs"]["rgb_obs"]["rgb_static"],
+                "rgb_gripper": obs["raw_obs"]["rgb_obs"]["rgb_gripper"],
+                "depth_static": obs["raw_obs"]["depth_obs"]["depth_static"],
+                "depth_gripper": obs["raw_obs"]["depth_obs"]["depth_gripper"],
+            }
+            frames.append(frame)
+            # Save the frames
             idx = frame_idx
             for frame in frames:
                 idx += 1
