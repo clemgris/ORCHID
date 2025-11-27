@@ -45,7 +45,7 @@ print(f"Total GPUs available: {torch.cuda.device_count()}")
 
 def main(args):
     results_folder = args.results_folder
-    pretrained_results_path = args.pretrained_results_path
+    pretrained_results_folder = args.pretrained_results_folder
     ft_data_path = args.ft_data_path
 
     if args.train_on == "lang":
@@ -282,7 +282,9 @@ def main(args):
     # Save cfg
     if args.checkpoint_num is not None:
         # Load checkpoint config which is a yaml
-        checkpoint_cfg_path = os.path.join(pretrained_results_path, "data_config.yaml")
+        checkpoint_cfg_path = os.path.join(
+            pretrained_results_folder, "data_config.yaml"
+        )
         checkpoint_cfg = OmegaConf.load(checkpoint_cfg_path)
 
         # Check if cfg and checkpoint_cfg align
@@ -326,7 +328,7 @@ def main(args):
 
     if args.checkpoint_num is not None:
         checkpoint_path = os.path.join(
-            pretrained_results_path, f"model-{args.checkpoint_num}.pt"
+            pretrained_results_folder, f"model-{args.checkpoint_num}.pt"
         )
         print(f"Loading checkpoint from {checkpoint_path}")
         policy.load_state_dict(torch.load(checkpoint_path))
@@ -415,7 +417,7 @@ if __name__ == "__main__":
         "-o", "--override", type=bool, default=False
     )  # set to True to overwrite results folder
     parser.add_argument(
-        "--pretrained_results_path",
+        "--pretrained_results_folder",
         type=str,
         default="/home/grislain/AVDC/calvin/models/LL_RGB",
     )  # set to path to pretrained model results folder
