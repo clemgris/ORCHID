@@ -6,6 +6,7 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from einops import rearrange
+from torch.utils.data import ConcatDataset
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -51,7 +52,9 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 def main(args):
     results_folder = args.results_folder
-    data_path = args.data_path
+    data_paths = args.data_paths
+
+    print("Training on ", len(data_paths), " datasets.")
 
     if args.diffuse_on != "pixel":
         diffuse_on = f"{args.diffuse_on}_{args.feat_patch_size}"
@@ -60,7 +63,7 @@ def main(args):
 
     cfg = DictConfig(
         {
-            "root": data_path,
+            "root": data_paths,
             "datamodule": {
                 "lang_dataset": {
                     "_target_": "calvin_agent.datasets.disk_dataset.DiskDiffusionDataset",
@@ -146,11 +149,15 @@ def main(args):
         )
     )
 
-    data_module = CalvinDataModule(
-        cfg.datamodule, transforms=transforms, root_data_dir=cfg.root
-    )
-    if args.mode == "train":
-        data_module.setup()
+    data_modules = []
+    for path in data_paths:
+        data_module = CalvinDataModule(
+            cfg.datamodule, transforms=transforms, root_data_dir=path
+        )
+        if args.mode == "train":
+            data_module.setup()
+        data_modules.append(data_module)
+
     results_folder = Path(results_folder)
 
     if args.mode == "train":
@@ -187,8 +194,13 @@ def main(args):
         train_set = valid_set = [None]  # dummy
         valid_n = 0
     else:
-        train_set = data_module.train_datasets["lang"]
-        valid_set = data_module.val_datasets["lang"]
+        train_sets = []
+        valid_sets = []
+        for data_module in data_modules:
+            train_sets.append(data_module.train_datasets["lang"])
+            valid_sets.append(data_module.val_datasets["lang"])
+        train_set = ConcatDataset(train_sets)
+        valid_set = ConcatDataset(valid_sets)
         valid_n = 1
 
         print("Train data:", len(train_set))
@@ -342,7 +354,7 @@ def main(args):
         precision=precision,
         amp=amp,
         calculate_fid=False,
-        feat_stats=train_set.feat_stats,
+        feat_stats=train_sets[0].feat_stats,
         norm_feat=cfg.datamodule.lang_dataset.norm_feat,
     )
 
@@ -589,9 +601,10 @@ if __name__ == "__main__":
         default=None,  # "/home/grislain/AVDC/calvin/models/decoder/decoder_model_48.pth",
     )  # set to decoder checkpoint path
     parser.add_argument(
-        "--data_path",
+        "--data_paths",
         type=str,
-        default="/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset",
+        nargs="+",
+        default=["/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset"],
     )  # set to data path
     parser.add_argument(
         "--train_num_steps", type=int, default=150000
