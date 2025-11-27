@@ -45,7 +45,9 @@ print(f"Total GPUs available: {torch.cuda.device_count()}")
 
 def main(args):
     results_folder = args.results_folder
-    data_path = args.data_path
+    data_paths = args.data_paths
+
+    print("Training on ", len(data_paths), " datasets.")
 
     if args.train_on == "lang":
         dataset_name = "lang_dataset"
@@ -62,7 +64,7 @@ def main(args):
 
     cfg = DictConfig(
         {
-            "root": data_path,
+            "root": data_paths,
             "datamodule": {
                 dataset_name: {
                     "_target_": "calvin_agent.datasets.disk_dataset.DiskActionDataset",
@@ -125,11 +127,13 @@ def main(args):
         )
     )
 
-    data_module = CalvinDataModule(
-        cfg.datamodule, transforms=transforms, root_data_dir=cfg.root
-    )
-
-    data_module.setup()
+    data_modules = []
+    for path in data_paths:
+        data_module = CalvinDataModule(
+            cfg.datamodule, transforms=transforms, root_data_dir=path
+        )
+        data_module.setup()
+        data_modules.append(data_module)
     results_folder = Path(results_folder)
 
     if os.path.exists(results_folder):
@@ -140,8 +144,13 @@ def main(args):
     results_folder.mkdir(exist_ok=True, parents=True)
     print("Results folder:", results_folder)
 
-    train_set = data_module.train_datasets[dataset_key]
-    valid_set = data_module.val_datasets[dataset_key]
+    train_sets = []
+    val_sets = []
+    for data_module in data_modules:
+        train_sets.append(data_module.train_datasets[dataset_key])
+        val_sets.append(data_module.val_datasets[dataset_key])
+    train_set = torch.utils.data.ConcatDataset(train_sets)
+    valid_set = torch.utils.data.ConcatDataset(val_sets)
 
     print("Train data:", len(train_set))
     print("Valid data:", len(valid_set))
@@ -278,7 +287,7 @@ def main(args):
     cfg["diff_cfg"] = diff_cfg
 
     # Load training statistics
-    stats_path = os.path.join(data_path, "training/statistics.yaml")
+    stats_path = os.path.join(data_paths[0], "training/statistics.yaml")
     train_stats = OmegaConf.load(stats_path)
 
     train_stats_dict = {
@@ -413,9 +422,10 @@ if __name__ == "__main__":
         "--training_steps", type=int, default=500000
     )  # set to number of training steps
     parser.add_argument(
-        "--data_path",
+        "--data_paths",
         type=str,
-        default="/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset",
+        nargs="+",
+        default=["/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset"],
     )  # set to path to dataset
     parser.add_argument(
         "-r", "--results_folder", type=str, default="../results_policy_single/calvin"
