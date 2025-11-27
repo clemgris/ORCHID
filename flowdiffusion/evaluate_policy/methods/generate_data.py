@@ -71,12 +71,14 @@ def generate_new_data(
 
     results = []
     ann_saving_path = os.path.join(saving_path, "lang_annotations/auto_lang_ann.npy")
-    if not os.path.exists(os.path.dirname(ann_saving_path)):
+    dirpath = os.path.dirname(ann_saving_path)
+    os.makedirs(dirpath, exist_ok=True)
+
+    if not os.path.exists(ann_saving_path):
         auto_lang_ann = {
             "info": {"episodes": [], "indx": [], "length": [], "num_trials": []},
             "language": {"ann": [], "task": []},
         }
-        os.makedirs(os.path.dirname(ann_saving_path), exist_ok=False)
     else:
         auto_lang_ann = np.load(ann_saving_path, allow_pickle=True).item()
 
