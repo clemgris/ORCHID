@@ -186,6 +186,8 @@ def main(args):
         assert all(key in allowed_mismatch for key in mismatching_keys), (
             f"Keys {mismatching_keys} are not in the allowed mismatch list {allowed_mismatch}"
         )
+        with open(os.path.join(results_folder, "data_config.yaml"), "w") as file:
+            file.write(OmegaConf.to_yaml(cfg))
     if args.mode == "inference":
         train_set = valid_set = [None]  # dummy
         valid_n = 0
