@@ -321,6 +321,9 @@ def main(args):
                 "min": torch.Tensor(train_stats.act_min_bound),
             }
         }
+        cfg["pretrained_results_folder"] = pretrained_results_folder
+        with open(os.path.join(results_folder, "data_config.yaml"), "w") as file:
+            file.write(OmegaConf.to_yaml(cfg))
     else:
         raise ValueError("Need checkpoint to fine-tuned")
 
