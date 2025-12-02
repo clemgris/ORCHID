@@ -22,15 +22,14 @@ sys.path.extend(
 )
 
 # === Local Project Imports ===
-from methods.evaluate_policy import evaluate_policy
-from model.hierarchical_model_calvin import HierarchicalModel
-from utils.transform_feat import update_feat_transform
-
 # === CALVIN Imports ===
 from calvin.calvin_env.calvin_env.envs.play_table_env import get_env
 from calvin.calvin_models.calvin_agent.datasets.calvin_data_module import (
     CalvinDataModule,
 )
+from methods.evaluate_policy import evaluate_policy
+from model.hierarchical_model_calvin import HierarchicalModel
+from utils.transform_feat import update_feat_transform
 
 # === Device Setup ===
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -48,44 +47,58 @@ def make_env(dataset_path):
 
 
 if __name__ == "__main__":
-    seed_everything(0, workers=True)  # type:ignore
+    seed_everything(0, workers=True)
     parser = argparse.ArgumentParser(
         description="Evaluate a trained model on multistep sequences with language goals."
     )
 
     parser.add_argument(
-        "--eval_folder",
-        type=str,
-        help="Where to log the evaluation results.",
-        default="eval_long_horizon",
-    )
-
-    parser.add_argument(
         "--policy_checkpoint_num",
-        type=int,
+        type=str,
         help="Policy checkpoint num",
-        default=1033,
+        default=9999,
     )
 
     parser.add_argument(
         "--policy_results_folder",
         type=str,
         help="Results folder",
-        default="/home/grislain/AVDC/calvin/models/policy_huit",
+        default="/home/grislain/AVDC/calvin/models/LL_RGB",
     )
 
     parser.add_argument(
         "--high_level_checkpoint_num",
-        type=int,
+        type=str,
         help="High level checkpoint number",
-        default=100,
+        default=199,
     )
 
     parser.add_argument(
         "--high_level_results_folder",
         type=str,
         help="Results folder",
-        default="/home/grislain/AVDC/calvin/models/results_huit_CLIP",
+        default="/home/grislain/AVDC/calvin/models/HL_RGB",
+    )
+
+    parser.add_argument(
+        "--high_level_sampling_timesteps",
+        type=int,
+        help="Number of sampling timesteps for high level model",
+        default=100,
+    )
+
+    parser.add_argument(
+        "--high_level_ddim_eta",
+        type=float,
+        help="DDIM eta for high level model",
+        default=0.0,
+    )
+
+    parser.add_argument(
+        "--test_on",
+        type=str,
+        help="Train on train or val",
+        default="train",
     )
 
     parser.add_argument(
@@ -97,17 +110,30 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--debug_path",
-        type=str,
-        help="Path to save debug images.",
-        default="/home/grislain/AVDC/debug_sequential",
+        "--use_oracle_subgoals",
+        action="store_true",
+        help="Use oracle subgoals",
     )
 
     parser.add_argument(
         "--num_subgoals",
         type=int,
-        help="Number of subgoals to generate.",
         default=8,
+        help="Number of subgoals to generate.",
+    )
+
+    parser.add_argument(
+        "--debug_path",
+        type=str,
+        default="/home/grislain/AVDC/debug",
+        help="Path to save debug images.",
+    )
+
+    parser.add_argument(
+        "--eval_folder",
+        type=str,
+        default="eval",
+        help="Folder to save evaluation results.",
     )
 
     parser.add_argument(
@@ -116,21 +142,44 @@ if __name__ == "__main__":
         help="Replan subgoals every 64 steps.",
     )
 
+    parser.add_argument(
+        "--use_filtered_data",
+        action="store_true",
+        help="Use filtered data (expert sucesses) for evaluation.",
+    )
+
+    parser.add_argument(
+        "--policy_model",
+        type=str,
+        default="diffusion",
+        choices=["diffusion", "act"],
+        help="Policy model to use.",
+    )
+
+    parser.add_argument(
+        "--high_level_guidance",
+        type=int,
+        default=3,
+        help="Guidance in high-level diffusion.",
+    )
+
     parser.add_argument("--device", default=0, type=int, help="CUDA device")
     args = parser.parse_args()
+    args.save_failures = args.debug_path is not None
 
-    if args.debug_path:
-        # Create debug folder
-        debug_path = Path(args.debug_path)
-        os.makedirs(debug_path, exist_ok=True)
-
-    # Do not change
-    args.ep_len = 240
-
-    # Load data configs
+    # Load data config
     policy_data_config = OmegaConf.load(
         os.path.join(args.policy_results_folder, "data_config.yaml")
     )
+    if not args.use_oracle_subgoals:
+        high_level_data_config = OmegaConf.load(
+            os.path.join(args.high_level_results_folder, "data_config.yaml")
+        )
+    else:
+        high_level_data_config = {}
+
+    # Do not change
+    args.ep_len = 240
 
     if args.server == "jz":
         data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/CALVIN/task_D_D_jz"
@@ -148,22 +197,45 @@ if __name__ == "__main__":
     else:
         raise ValueError("Invalid server argument")
 
-    policy_data_config.root = data_path
+    # load low level config
     if "lang_dataset" not in policy_data_config.datamodule:
         assert "vis_dataset" in policy_data_config.datamodule, (
-            "vis_dataset or lanfg_dataset must be present in policy_data_config.datamodule"
+            "vis_dataset or lang_dataset must be present in policy_data_config.datamodule"
         )
         policy_data_config.datamodule.lang_dataset = (
             policy_data_config.datamodule.vis_dataset
         )
         policy_data_config.datamodule.lang_dataset.key = "lang"
 
-    high_level_data_config = OmegaConf.load(
-        os.path.join(args.high_level_results_folder, "data_config.yaml")
+    policy_data_config.datamodule.lang_dataset._target_ = (
+        "calvin_agent.datasets.disk_dataset.DiskDiffusionOracleDataset"
     )
+    del policy_data_config.datamodule.lang_dataset.prob_aug
+    policy_data_config.root = data_path
+    policy_data_config.datamodule.lang_dataset.auto_lang_name = (
+        "filtered_auto_lang_ann" if args.use_filtered_data else "auto_lang_ann"
+    )
+
+    if "diffuse_on" in policy_data_config.datamodule.lang_dataset:
+        # Old config
+        policy_data_config.datamodule.lang_dataset.goal = (
+            policy_data_config.datamodule.lang_dataset.diffuse_on
+        )
+        policy_data_config.datamodule.lang_dataset.obs = "pixel"
+        del policy_data_config.datamodule.lang_dataset.diffuse_on
+
+    if high_level_data_config != {} and (
+        "diffuse_on" in high_level_data_config.datamodule.lang_dataset
+    ):
+        high_level_data_config.datamodule.lang_dataset.goal = (
+            high_level_data_config.datamodule.lang_dataset.diffuse_on
+        )
+        del high_level_data_config.datamodule.lang_dataset.diffuse_on
+
     config = DictConfig(
         {
             "policy": {
+                "model": args.policy_model,
                 "checkpoint_num": args.policy_checkpoint_num,
                 "results_folder": args.policy_results_folder,
                 **policy_data_config,
@@ -171,10 +243,11 @@ if __name__ == "__main__":
             "high_level": {
                 "checkpoint_num": args.high_level_checkpoint_num,
                 "results_folder": args.high_level_results_folder,
-                "use_oracle_subgoals": policy_data_config.datamodule.lang_dataset.get(
-                    "without_guidance", False
-                ),
+                "use_oracle_subgoals": args.use_oracle_subgoals,
                 **high_level_data_config,
+                "sampling_timesteps": args.high_level_sampling_timesteps,
+                "ddim_sampling_eta": args.high_level_ddim_eta,
+                "guidance": args.high_level_guidance,
             },
             "debug_path": args.debug_path,
             "server": args.server,
