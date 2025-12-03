@@ -190,6 +190,7 @@ def rollout_data_collection(
     lang_annotation = random.choice(annotations[subtask])
     model.reset()
     start_info = env.get_info()
+    success = False
 
     frames = []
     obs_list = []
@@ -202,7 +203,7 @@ def rollout_data_collection(
         )
         + start_idx
     )
-    for step in range(70):
+    for step in range(65):
         action = model.step(obs, lang_annotation)
         frame = {
             "actions": action.detach().cpu().numpy(),
@@ -227,6 +228,8 @@ def rollout_data_collection(
 
         # If solved, save the frames and return
         if len(current_task_info) > 0:
+            success = True
+        if success and (step >= 35):
             # Last frame
             action = model.step(obs, lang_annotation)  # last action, not executed
             frame = {

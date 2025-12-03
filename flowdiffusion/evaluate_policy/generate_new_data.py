@@ -223,7 +223,7 @@ if __name__ == "__main__":
             "debug_path": args.debug_path,
             "server": args.server,
             "num_subgoals": args.num_subgoals,
-            "replan": args.replan,
+            "replan": False,
         }
     )
 
@@ -279,7 +279,7 @@ if __name__ == "__main__":
         rollout_cfg.env_cfg, policy_dataset, device, show_gui=False
     )
 
-    # Initialize state buffer
+    # Initialize state buffer with preloaded states from dataset
     buffer = StateBuffer(tasks.keys(), max_size=1e6)
     buffer_save_path = os.path.join(
         policy_dataset.abs_datasets_dir, f"state_buffer_{args.buffer_mode}.pkl"
