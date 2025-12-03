@@ -182,7 +182,7 @@ if __name__ == "__main__":
     # load low level config
     if "lang_dataset" not in policy_data_config.datamodule:
         assert "vis_dataset" in policy_data_config.datamodule, (
-            "vis_dataset or lanfg_dataset must be present in policy_data_config.datamodule"
+            "vis_dataset or lang_dataset must be present in policy_data_config.datamodule"
         )
         policy_data_config.datamodule.lang_dataset = (
             policy_data_config.datamodule.vis_dataset

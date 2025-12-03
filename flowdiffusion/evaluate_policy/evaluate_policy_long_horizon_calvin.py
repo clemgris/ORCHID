@@ -178,9 +178,6 @@ if __name__ == "__main__":
     else:
         high_level_data_config = {}
 
-    # Do not change
-    args.ep_len = 240
-
     if args.server == "jz":
         data_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/CALVIN/task_D_D_jz"
         rollout_cfg_path = "/lustre/fswork/projects/rech/fch/uxv44vw/clemgris/avdc/calvin/calvin_models/conf/callbacks/rollout/default.yaml"
