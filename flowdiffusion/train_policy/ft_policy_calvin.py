@@ -127,11 +127,15 @@ def main(args):
         )
     )
 
-    data_module = CalvinDataModule(
-        cfg.datamodule, transforms=transforms, root_data_dir=cfg.root
-    )
+    data_modules = []
+    for path in ft_data_path:
+        data_module = CalvinDataModule(
+            cfg.datamodule, transforms=transforms, root_data_dir=path
+        )
+        data_module.setup()
+        data_modules.append(data_module)
+    results_folder = Path(results_folder)
 
-    data_module.setup()
     results_folder = Path(results_folder)
 
     if os.path.exists(results_folder):
@@ -142,8 +146,13 @@ def main(args):
     results_folder.mkdir(exist_ok=True, parents=True)
     print("Results folder:", results_folder)
 
-    train_set = data_module.train_datasets[dataset_key]
-    valid_set = data_module.val_datasets[dataset_key]
+    train_sets = []
+    val_sets = []
+    for data_module in data_modules:
+        train_sets.append(data_module.train_datasets[dataset_key])
+        val_sets.append(data_module.val_datasets[dataset_key])
+    train_set = torch.utils.data.ConcatDataset(train_sets)
+    valid_set = torch.utils.data.ConcatDataset(val_sets)
 
     print("Train data:", len(train_set))
     print("Valid data:", len(valid_set))
@@ -312,7 +321,7 @@ def main(args):
         if os.path.exists(stats_path):
             train_stats = OmegaConf.load(stats_path)
         else:
-            stats_path = os.path.join(ft_data_path, "training", "statistics.yaml")
+            stats_path = os.path.join(ft_data_path[0], "training", "statistics.yaml")
             train_stats = OmegaConf.load(stats_path)
 
         train_stats_dict = {
@@ -433,6 +442,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ft_data_path",
         type=str,
+        nargs="+",
         default="/home/grislain/AVDC/gen_new_data",
     )  # set to path to dataset
     parser.add_argument(

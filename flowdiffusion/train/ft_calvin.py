@@ -6,6 +6,7 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from einops import rearrange
+from torch.utils.data import ConcatDataset
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -147,11 +148,15 @@ def main(args):
         )
     )
 
-    data_module = CalvinDataModule(
-        cfg.datamodule, transforms=transforms, root_data_dir=cfg.root
-    )
-    if args.mode == "train":
-        data_module.setup()
+    data_modules = []
+    for path in ft_data_path:
+        data_module = CalvinDataModule(
+            cfg.datamodule, transforms=transforms, root_data_dir=path
+        )
+        if args.mode == "train":
+            data_module.setup()
+        data_modules.append(data_module)
+
     results_folder = Path(results_folder)
 
     if args.mode == "train":
@@ -193,8 +198,13 @@ def main(args):
         train_set = valid_set = [None]  # dummy
         valid_n = 0
     else:
-        train_set = data_module.train_datasets["lang"]
-        valid_set = train_set
+        train_sets = []
+        valid_sets = []
+        for data_module in data_modules:
+            train_sets.append(data_module.train_datasets["lang"])
+            valid_sets.append(data_module.val_datasets["lang"])
+        train_set = ConcatDataset(train_sets)
+        valid_set = ConcatDataset(valid_sets)
         valid_n = 1
 
         print("Train data:", len(train_set))
@@ -604,6 +614,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ft_data_path",
         type=str,
+        nargs="+",
         default="/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset",
     )  # set to finetuning data path
     parser.add_argument(
