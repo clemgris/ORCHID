@@ -346,27 +346,6 @@ def get_env_state_for_initial_condition(initial_condition):
 
 
 def get_random_env_state_for_initial_condition(initial_condition):
-    # lower_joint_limits = (
-    #     (
-    #         -1.8973,  # -2.8973,
-    #         -1.0628,  # -1.7628,
-    #         -1.8973,  # -2.8973,
-    #         -2.0718,  # -3.0718,
-    #         -1.8973,  # -2.8973,
-    #         -0.0175,  # -0.0175,
-    #         -1.8973,  # -2.8973,
-    #     ),
-    # )
-    # upper_joint_limits = (
-    #     1.8973,  # 2.8973,
-    #     1.0628,  # 1.7628,
-    #     1.8973,  # 2.8973,
-    #     -0.0698,  # -0.0698,
-    #     1.8973,  # 2.8973,
-    #     2.7525,  # 3.7525,
-    #     1.8973,  # 2.8973,
-    # )
-
     robot_obs = np.array(
         [
             0.02586889,  # x derived from joint angles
@@ -386,9 +365,6 @@ def get_random_env_state_for_initial_condition(initial_condition):
             1.0,  # gripper actionn
         ]
     )
-
-    # robot_joints = np.random.uniform(low=lower_joint_limits, high=upper_joint_limits)
-    # robot_obs[7:14] = robot_joints
 
     robot_gripper_width = np.random.uniform(0.0, 0.08)
     robot_obs[6] = robot_gripper_width

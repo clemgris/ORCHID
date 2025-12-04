@@ -929,6 +929,8 @@ def get_initial_states(num_data, task):
         seq = [task]
         if check_sequence(state, seq):
             results.append((state, seq))
+    if len(results) == 0:
+        return results
     results = (results * (num_data // len(results) + 1))[:num_data]
     logger.info("Done generating evaluation sequences.")
 
