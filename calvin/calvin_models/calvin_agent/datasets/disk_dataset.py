@@ -782,7 +782,7 @@ class DiskActionDataset(BaseDataset):
             f'Found "ep_start_end_ids.npy" with {len(ep_start_end_ids)} episodes.'
         )
         for i, (start_idx, end_idx) in enumerate(ep_start_end_ids):
-            assert end_idx >= self.max_window_size
+            assert end_idx >= self.min_window_size
             num_frames = end_idx - start_idx + 1
             chunk_size = int(np.ceil(self.max_window_size / self.num_subgoals))
             for j in range(0, max(1, num_frames - chunk_size)):
@@ -1289,7 +1289,7 @@ class DiskEvaluatorDataset(BaseDataset):
         lang_task = lang_data["language"]["task"]  # length total number of annotations
         lang_lookup = []
         for i, (start_idx, end_idx) in enumerate(ep_start_end_ids):
-            assert end_idx >= self.max_window_size
+            assert end_idx >= self.min_window_size
             lang_lookup.append(i)
             lang_lookup.append(i)
             episode_lookup.append((start_idx, end_idx, 0))
@@ -1495,7 +1495,7 @@ class DiskDiffusionOracleDataset(BaseDataset):
         lang_task = lang_data["language"]["task"]  # length total number of annotations
         lang_lookup = []
         for i, (start_idx, end_idx) in enumerate(ep_start_end_ids):
-            assert end_idx >= self.max_window_size
+            assert end_idx >= self.min_window_size
             lang_lookup.append(i)
             episode_lookup.append((start_idx, end_idx))
         return np.array(episode_lookup), lang_lookup, lang_ann, lang_task
