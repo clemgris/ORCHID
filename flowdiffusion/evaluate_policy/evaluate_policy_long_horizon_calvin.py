@@ -47,7 +47,7 @@ def make_env(dataset_path):
 
 
 if __name__ == "__main__":
-    seed_everything(0, workers=True)
+    # seed_everything(0, workers=True)
     parser = argparse.ArgumentParser(
         description="Evaluate a trained model on multistep sequences with language goals."
     )
@@ -163,9 +163,19 @@ if __name__ == "__main__":
         help="Guidance in high-level diffusion.",
     )
 
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Random seed.",
+    )
+
     parser.add_argument("--device", default=0, type=int, help="CUDA device")
     args = parser.parse_args()
     args.save_failures = args.debug_path is not None
+
+    # Set random seed
+    seed_everything(args.seed, workers=True)
 
     # Load data config
     policy_data_config = OmegaConf.load(
