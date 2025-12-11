@@ -204,7 +204,7 @@ def main(args):
             train_sets.append(data_module.train_datasets["lang"])
             valid_sets.append(data_module.val_datasets["lang"])
         train_set = ConcatDataset(train_sets)
-        valid_set = ConcatDataset(valid_sets)
+        valid_set = train_set #ConcatDataset(valid_sets)
         valid_n = 1
 
         print("Train data:", len(train_set))
@@ -359,7 +359,7 @@ def main(args):
         precision=precision,
         amp=amp,
         calculate_fid=False,
-        feat_stats=train_set.feat_stats,
+        feat_stats=train_sets[0].feat_stats,
         norm_feat=cfg.datamodule.lang_dataset.norm_feat,
     )
 
