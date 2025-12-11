@@ -47,7 +47,8 @@ print(f"Total GPUs available: {torch.cuda.device_count()}")
 
 def main(args):
     results_folder = args.results_folder
-    data_path = args.data_path
+    pretrained_results_folder = args.pretrained_results_folder
+    ft_data_path = args.ft_data_path
 
     if args.train_on == "lang":
         dataset_name = "lang_dataset"
@@ -64,7 +65,7 @@ def main(args):
 
     cfg = DictConfig(
         {
-            "root": data_path,
+            "root": ft_data_path,
             "datamodule": {
                 dataset_name: {
                     "_target_": "calvin_agent.datasets.disk_dataset.DiskActionDataset",
@@ -128,7 +129,7 @@ def main(args):
     )
 
     data_modules = []
-    for path in data_path:
+    for path in ft_data_path:
         data_module = CalvinDataModule(
             cfg.datamodule, transforms=transforms, root_data_dir=path
         )
@@ -287,7 +288,7 @@ def main(args):
     cfg["diff_cfg"] = act_cfg
 
     # Load training statistics
-    stats_path = os.path.join(data_path[0], "training/statistics.yaml")
+    stats_path = os.path.join(ft_data_path[0], "training/statistics.yaml")
     train_stats = OmegaConf.load(stats_path)
 
     train_stats_dict = {
@@ -298,10 +299,13 @@ def main(args):
     }
 
     cfg["stats_path"] = stats_path
+    cfg["pretrained_results_folder"] = pretrained_results_folder
     # Save cfg
     if args.checkpoint_num is not None:
         # Load checkpoint config which is a yaml
-        checkpoint_cfg_path = os.path.join(results_folder, "data_config.yaml")
+        checkpoint_cfg_path = os.path.join(
+            pretrained_results_folder, "data_config.yaml"
+        )
         checkpoint_cfg = OmegaConf.load(checkpoint_cfg_path)
 
         # Check if cfg and checkpoint_cfg align
@@ -327,10 +331,14 @@ def main(args):
 
     if args.checkpoint_num is not None:
         checkpoint_path = os.path.join(
-            results_folder, f"model-{args.checkpoint_num}.pt"
+            pretrained_results_folder, f"model-{args.checkpoint_num}.pt"
         )
         print(f"Loading checkpoint from {checkpoint_path}")
         policy.load_state_dict(torch.load(checkpoint_path))
+    else:
+        raise ValueError(
+            "Fine-tuning requires a pretrained checkpoint to be specified."
+        )
 
     policy.train()
     policy.to(device)
@@ -362,17 +370,6 @@ def main(args):
         shuffle=True,
         pin_memory=device != torch.device("cpu"),
         drop_last=True,
-        persistent_workers=True,
-        prefetch_factor=4,
-    )
-
-    val_dataloader = torch.utils.data.DataLoader(
-        valid_set,
-        num_workers=4 if args.server == "hacienda" else 8,
-        batch_size=cfg.datamodule[dataset_name]["batch_size"],
-        shuffle=False,
-        pin_memory=device != torch.device("cpu"),
-        drop_last=False,
         persistent_workers=True,
         prefetch_factor=4,
     )
@@ -431,44 +428,6 @@ def main(args):
                         f"Step {step} | Train loss {loss.item():.3f} | LR {current_lr:.3e}\n"
                     )
 
-            # Evaluation
-            if eval_freq is not None and step % eval_freq == 0:
-                policy.eval()
-                val_loss = 0.0
-                val_steps = 0
-                with torch.no_grad():
-                    for val_batch in tqdm(
-                        val_dataloader, desc="Validation", leave=False
-                    ):
-                        batch_text = val_batch.get("text", None)
-                        if args.use_text:
-                            batch_text_ids = tokenizer(
-                                batch_text,
-                                return_tensors="pt",
-                                padding=True,
-                                truncation=True,
-                                max_length=128,
-                            ).to(device)
-                            val_batch["text"] = text_encoder(
-                                **batch_text_ids
-                            ).last_hidden_state
-                        else:
-                            del val_batch["text"]
-                        val_batch = {
-                            k: v.to(device, non_blocking=True)
-                            for k, v in val_batch.items()
-                        }
-                        output_dict = policy.forward(val_batch)
-                        val_loss += output_dict["loss"].item()
-                        val_steps += 1
-                val_loss /= val_steps
-                policy.train()
-
-                # print(f"Step {step} | Validation loss: {val_loss:.3f}")
-                # Write the validation loss to a file
-                with open(os.path.join(results_folder, "val_loss.txt"), "a") as f:
-                    f.write(f"Step {step} | Val loss {val_loss:.3f}\n")
-
             # Save model
             if step % cfg.save_every == 0:
                 # Delete previous checkpoints
@@ -525,11 +484,16 @@ if __name__ == "__main__":
         "--training_steps", type=int, default=500000
     )  # set to number of training steps
     parser.add_argument(
-        "--data_path",
+        "--ft_data_path",
         type=str,
         nargs="+",
         default=["/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset"],
     )  # set to path to dataset
+    parser.add_argument(
+        "--pretrained_results_folder",
+        type=str,
+        default="/home/grislain/AVDC/calvin/models/LL_RGB",
+    )  # set to path to pretrained model results folder
     parser.add_argument(
         "-r", "--results_folder", type=str, default="../results_policy_single/calvin"
     )  # set to path to results folder
