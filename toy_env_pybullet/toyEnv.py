@@ -550,7 +550,7 @@ class Franka3CubeEnvPyBullet:
         current_obs,
         target_pos,
         target_quat=None,
-        position_gain=0.8,
+        position_gain=0.65,
         orientation_gain=0.5,
         gripper_cmd=None,
         position_threshold=0.005,
@@ -740,7 +740,6 @@ class Franka3CubeEnvPyBullet:
         cube_map = {"A": "cube_a_pos", "B": "cube_b_pos", "C": "cube_c_pos"}
         cube_pos = curr[cube_map[cube_name]]
         hand_pos = curr["hand_pos"]
-        gripper_pos = curr["gripper_pos"].squeeze(-1)
         actions = torch.zeros(1, 7)
 
         grasp_pos = cube_pos.clone()
@@ -750,25 +749,26 @@ class Franka3CubeEnvPyBullet:
         dist_to_grasp = torch.norm(hand_pos - grasp_pos, dim=-1)
         cube_height = cube_pos[:, 2] - init["cube_" + cube_name.lower() + "_pos"][:, 2]
 
-        if dist_to_grasp[0] > self.phase_transition_threshold:
+        if (cube_height[0] >= self.lift_height_threshold + 0.05) and self.has_cube()[0]:
+            # print("done")
+            return actions
+        elif (cube_height[0] < self.lift_height_threshold + 0.05) and (
+            self.has_cube()[0]
+        ):
+            # print("lift_up")
+            actions[:, 2] = 0.4
+            actions[:, 6] = -1.0
+        elif dist_to_grasp[0] > self.phase_transition_threshold:
             # print('go_closer')
             return self._go_to(current_state, grasp_pos[0], gripper_cmd=1.0)
         elif (not self.has_cube()[0]) and (
             self.get_gripper_openness() < self.cube_size - 0.02
         ):
-            # open gripper
             # print('open_gripper')
             actions[:, 6] = 1.0
         elif not self.has_cube()[0]:
             # print('close_gripper')
             actions[:, 6] = -1.0
-        else:
-            # print('lift')
-            actions[:, 2] = 0.8
-            if self.has_cube()[0]:
-                actions[:, 6] = -1.0
-            else:
-                actions[:, 6] = 1.0
 
         return actions
 
@@ -815,19 +815,7 @@ class Franka3CubeEnvPyBullet:
         if not self._in_contact(up_id, bottom_id):
             return torch.tensor([0.0])
 
-        # --- 2. Up cube must NOT touch gripper ---
-        for link in self.franka_gripper_indices:
-            if (
-                len(
-                    p.getContactPoints(
-                        bodyA=self.franka_id, bodyB=up_id, linkIndexA=link
-                    )
-                )
-                > 0
-            ):
-                return torch.tensor([0.0])
-
-        # --- 3. Height condition (up cube above bottom cube) ---
+        # --- 2. Height condition (up cube above bottom cube) ---
         up_pos, _ = p.getBasePositionAndOrientation(up_id)
         bottom_pos, _ = p.getBasePositionAndOrientation(bottom_id)
 
@@ -892,19 +880,21 @@ class Franka3CubeEnvPyBullet:
             > 0.5
         ):
             # print("done")
+            if hand_pos[0, 2] < self.cube_size * 4 + 0.2:
+                actions[:, 2] = 0.4
             actions[:, 6] = 1.0
         else:
             if (not has_cube_a) or (
                 self.max_cube_height[up_cube] < self.cube_size + 0.05
             ):
                 # print("lift")
-                return self.expert_lift(initial_state, current_state)
+                return self.expert_lift(initial_state, current_state, up_cube)
             elif not is_above_b[0]:
-                # print("go_above")
+                # print("go_above", above_b_pos, hand_pos)
                 return self._go_to(current_state, above_b_pos, gripper_cmd=-1.0)
             elif hand_pos[0, 2] > self.cube_size:
                 # print("go_down")
-                actions[:, 2] = -0.6
+                actions[:, 2] = -0.4
                 actions[:, 6] = 1.0
             else:
                 actions[:, 6] = -1.0
@@ -973,7 +963,11 @@ class Franka3CubeEnvPyBullet:
 
         if pushed_dist[0] > self.push_distance + 0.01:
             # print("done")
-            return torch.zeros(1, 7, device=hand_pos.device)
+            actions = torch.zeros(1, 7, device=hand_pos.device)
+            if hand_pos[0, 2] < self.cube_size * 4 + 0.2:
+                actions[..., 2] = 0.4
+                actions[..., 6] = 1
+            return actions
         if not self.has_cube()[0]:
             # print("get_the_cube")
             return self.expert_lift(initial_state, current_state, cube_name)
@@ -981,7 +975,7 @@ class Franka3CubeEnvPyBullet:
             # print("push")
             actions = torch.zeros(1, 7, device=hand_pos.device)
             actions[..., 6] = -1
-            actions[..., :3] = push_dir
+            actions[..., :3] = push_dir * 0.4
             return actions
 
     # Specific push task wrappers
