@@ -119,7 +119,7 @@ def collect_demonstrations(
 
             for step in range(max_steps):
                 # Check if task is complete
-                if count_done > 5:
+                if (count_done > 5) and step > 50:
                     # Return to neutral position
                     actions = env._go_to(obs["state"], neutral_pos, gripper_cmd=1)
                     success = True
