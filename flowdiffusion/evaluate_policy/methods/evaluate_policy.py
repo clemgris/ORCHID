@@ -18,6 +18,7 @@ sys.path.extend(
     [
         str(ROOT_PATH),
         str(ROOT_PATH / "flowdiffusion"),
+        str(ROOT_PATH / "toyEnv"),
         str(ROOT_PATH / "calvin/calvin_models"),
     ]
 )
@@ -34,7 +35,14 @@ from calvin.calvin_models.calvin_agent.evaluation.utils import (
     get_log_dir,
     print_and_save,
 )
-from methods.rollout import rollout, rollout_data_collection, rollout_with_oracle
+from toyEnv import TASK_NAMES as toy_taks
+
+from methods.rollout import (
+    rollout,
+    rollout_data_collection,
+    rollout_toy,
+    rollout_with_oracle,
+)
 
 # === Logger ===
 logger = logging.getLogger(__name__)
@@ -67,18 +75,74 @@ def evaluate_policy_singlestep(model, env, dataset, args, conf_dir):
             lengths[task] = [length]
         else:
             lengths[task].append(length)
-        print(f"{task}: {results[task]} / {tot_tasks[task]} ({length}, {length//LENGTH_REF_TRAJ+1})")
+        print(
+            f"{task}: {results[task]} / {tot_tasks[task]} ({length}, {length // LENGTH_REF_TRAJ + 1})"
+        )
 
     print("\nResults\n" + "-" * 60)
     for task in results:
-        print(f"{task}: {results[task]} / {tot_tasks[task]} (sr {results[task] / tot_tasks[task]} length {np.mean(lengths[task])} #replan {np.mean(np.array(lengths[task])//LENGTH_REF_TRAJ+1)})")
+        print(
+            f"{task}: {results[task]} / {tot_tasks[task]} (sr {results[task] / tot_tasks[task]} length {np.mean(lengths[task])} #replan {np.mean(np.array(lengths[task]) // LENGTH_REF_TRAJ + 1)})"
+        )
 
     print(f"SR: {sum(results.values()) / sum(tot_tasks.values()) * 100:.1f}%")
 
     # Save results
     with open(os.path.join(args.eval_folder, f"results_{args.test_on}.txt"), "w") as f:
         for task in results:
-            f.write(f"{task}: {results[task]} / {tot_tasks[task]} (sr {results[task] / tot_tasks[task]} length {np.mean(lengths[task])} #replan {np.mean(np.array(lengths[task])//LENGTH_REF_TRAJ+1)})\n")
+            f.write(
+                f"{task}: {results[task]} / {tot_tasks[task]} (sr {results[task] / tot_tasks[task]} length {np.mean(lengths[task])} #replan {np.mean(np.array(lengths[task]) // LENGTH_REF_TRAJ + 1)})\n"
+            )
+        f.write(f"SR: {sum(results.values()) / sum(tot_tasks.values()) * 100:.1f}%\n")
+
+
+def evaluate_policy_singlestep_toy(model, env, args):
+    results = Counter()
+    tot_tasks = Counter()
+    lengths = {}
+
+    for task_id, task in enumerate(toy_taks):
+        for trial in range(100):
+            if task_id == 3:
+                reward_fn = (  # noqa: E731
+                    lambda x, y: env.compute_reward_stack(
+                        x, y, up_cube="A", bottom_cube="B"
+                    )
+                    or env.compute_reward_stack(x, y, up_cube="A", bottom_cube="C")
+                    or env.compute_reward_stack(x, y, up_cube="B", bottom_cube="A")
+                    or env.compute_reward_stack(x, y, up_cube="B", bottom_cube="C")
+                    or env.compute_reward_stack(x, y, up_cube="C", bottom_cube="A")
+                    or env.compute_reward_stack(x, y, up_cube="C", bottom_cube="B")
+                )
+            else:
+                reward_fn = env.get_reward_function(task_id)
+            success, length = rollout_toy(
+                env, model, task, task_id, reward_fn, debug_path=args.debug_path
+            )
+            results[task] += success
+            tot_tasks[task] += 1
+            if tot_tasks[task] == 1:
+                lengths[task] = [length]
+            else:
+                lengths[task].append(length)
+            print(
+                f"{task}: {results[task]} / {tot_tasks[task]} ({length}, {length // LENGTH_REF_TRAJ + 1})"
+            )
+
+        print("\nResults\n" + "-" * 60)
+        for task in results:
+            print(
+                f"{task}: {results[task]} / {tot_tasks[task]} (sr {results[task] / tot_tasks[task]} length {np.mean(lengths[task])} #replan {np.mean(np.array(lengths[task]) // LENGTH_REF_TRAJ + 1)})"
+            )
+
+    print(f"SR: {sum(results.values()) / sum(tot_tasks.values()) * 100:.1f}%")
+
+    # Save results
+    with open(os.path.join(args.eval_folder, f"results_{args.test_on}.txt"), "w") as f:
+        for task in results:
+            f.write(
+                f"{task}: {results[task]} / {tot_tasks[task]} (sr {results[task] / tot_tasks[task]} length {np.mean(lengths[task])} #replan {np.mean(np.array(lengths[task]) // LENGTH_REF_TRAJ + 1)})\n"
+            )
         f.write(f"SR: {sum(results.values()) / sum(tot_tasks.values()) * 100:.1f}%\n")
 
 

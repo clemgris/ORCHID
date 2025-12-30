@@ -18,6 +18,7 @@ sys.path.extend(
     ]
 )
 
+from toyEnv import TASK_INSTRUCTIONS as toy_annotations
 from utils.vis import save_gif
 
 logger = logging.getLogger(__name__)
@@ -166,6 +167,79 @@ def rollout(env, model, task_oracle, subtask, val_annotations, debug_path=None):
                     torch.cat([init[kk].cpu(), subgoal.cpu()]),
                     os.path.join(
                         f"failures/failed_{subtask.replace(' ', '_')}_{failure_idx}",
+                        f"subgoals_{kk}.png",
+                    ),
+                )
+    return False, step
+
+
+def rollout_toy(env, model, task, task_id, reward_fn, debug_path=None):
+    """
+    Run the actual rollout on one task (which is one natural language instruction).
+    """
+    # get lang annotation for task
+    lang_annotation = toy_annotations[task]
+
+    obs = env.reset(task_id=task_id)
+    init_obs = obs.copy()
+
+    model.reset()
+
+    obs_list = []
+    subgoals = []
+    init = []
+    for step in range(EP_LEN):
+        action = model.step(obs, lang_annotation)
+        obs, _, _, current_info = env.step(action)
+        if debug_path:
+            obs_list.append(obs["pixels"][0])
+        # check if current step solves a task
+        reward = reward_fn(init_obs, obs)
+        if debug_path:
+            sample_subgoals = (
+                step % model.ref_traj_length == 0 if model.replan else step == 0
+            )
+            if sample_subgoals:
+                subgoals.append(model.sub_goals[0, :, 0])
+                init.append(model.init_subgoal_gen[0])
+        if reward > 0.5:
+            print(colored("S", "green"), end=" ")
+            return True, step
+    print(colored("F", "red"), end=" ")
+
+    if debug_path:
+        # Create folder for this failed episode
+        os.makedirs(debug_path + "/failures/", exist_ok=True)
+        failure_idx = len(os.listdir(debug_path + "/failures/"))
+        failed_episode_path = os.path.join(
+            debug_path, f"failures/failed_{task.replace(' ', '_')}_{failure_idx}"
+        )
+        os.makedirs(
+            failed_episode_path,
+            exist_ok=True,
+        )
+        # Save episode (as png)
+        torchvision.utils.save_image(
+            (torch.stack(obs_list)).float(),
+            os.path.join(
+                failed_episode_path,
+                "trajectory.png",
+            ),
+        )
+        # Save episode (as gif)
+        save_gif(
+            obs_list,
+            os.path.join(failed_episode_path, "trajectory.gif"),
+            duration=1.0,
+            norm=False,
+        )
+        # Save subgoals
+        if not model.cfg.policy.dataset.get("without_guidance", False):
+            for kk, subgoal in enumerate(subgoals):
+                model.save_image(
+                    torch.cat([init[kk][None, ...].cpu(), subgoal.cpu()]),
+                    os.path.join(
+                        f"failures/failed_{task.replace(' ', '_')}_{failure_idx}",
                         f"subgoals_{kk}.png",
                     ),
                 )
