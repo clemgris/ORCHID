@@ -12,26 +12,39 @@ import pybullet as p
 import pybullet_data
 import torch
 
+# Task definitions
+TASK_NAMES = [
+    "lift_A",  # 0: Lift cube A
+    "lift_B",  # 1: Lift cube B
+    "lift_C",  # 2: Lift cube C
+    "stack",  # 3: Stack one cube on another (any valid pair)
+    "push_C_left",  # 4: Push cube C to the left
+    "push_C_right",  # 5: Push cube C to the right
+    "push_B_left",  # 6: Push cube B to the left
+    "push_B_right",  # 7: Push cube B to the right
+    "push_A_left",  # 8: Push cube A to the left
+    "push_A_right",  # 9: Push cube A to the right
+]
+
+TASK_INSTRUCTIONS = {
+    "lift_A": "Lift the red block.",
+    "lift_B": "Lift the green block.",
+    "lift_C": "Lift the blue block.",
+    "stack": "Stack one block on top of another block.",
+    "push_A_left": "Push the red block to the left.",
+    "push_A_right": "Push the red block to the right.",
+    "push_B_left": "Push the green block to the left.",
+    "push_B_right": "Push the green block to the right.",
+    "push_C_left": "Push the blue block to the left.",
+    "push_C_right": "Push the blue block to the right.",
+}
+
 
 class Franka3CubeEnvPyBullet:
     """
     Complete multi-task environment for Franka robot with 3 cubes using PyBullet
     Includes full PyBullet setup, reset, step, rewards, and expert policies
     """
-
-    # Task definitions
-    TASK_NAMES = [
-        "lift_A",  # 0: Lift cube A
-        "lift_B",  # 1: Lift cube B
-        "lift_C",  # 2: Lift cube C
-        "stack",  # 3: Stack one cube on another (any valid pair)
-        "push_C_left",  # 4: Push cube C to the left
-        "push_C_right",  # 5: Push cube C to the right
-        "push_B_left",  # 6: Push cube B to the left
-        "push_B_right",  # 7: Push cube B to the right
-        "push_A_left",  # 8: Push cube A to the left
-        "push_A_right",  # 9: Push cube A to the right
-    ]
 
     def __init__(
         self,
@@ -319,9 +332,9 @@ class Franka3CubeEnvPyBullet:
         # Sample task
         if task_id is None:
             if self.task_mode == "random":
-                self.current_task_id = random.randint(0, len(self.TASK_NAMES) - 1)
+                self.current_task_id = random.randint(0, len(TASK_NAMES) - 1)
             elif self.task_mode == "sequential":
-                self.current_task_id = (self.current_task_id + 1) % len(self.TASK_NAMES)
+                self.current_task_id = (self.current_task_id + 1) % len(TASK_NAMES)
         else:
             self.current_task_id = task_id
 

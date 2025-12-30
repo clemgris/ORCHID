@@ -32,7 +32,6 @@ TASK_INSTRUCTIONS = {
     "push_C_right": "Push the blue block to the right.",
 }
 
-
 """Collect expert demonstrations for all tasks."""
 
 # Initialize environment
