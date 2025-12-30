@@ -127,6 +127,9 @@ class Franka3CubeEnvPyBullet:
 
     def _create_sim(self):
         """Create PyBullet simulation"""
+        if p.isConnected():
+            p.disconnect()
+
         # Connect to PyBullet
         if self.headless:
             self.physics_client = p.connect(p.DIRECT)
