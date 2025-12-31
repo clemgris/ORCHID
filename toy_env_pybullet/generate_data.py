@@ -50,8 +50,8 @@ def collect_demonstrations(
         os.makedirs(debug_path, exist_ok=True)
 
     # Initialize environment
-    cfg = {"num_envs": 1, "max_episode_length": 500, "task_mode": "random"}
-    env = Franka3CubeEnvPyBullet(cfg, headless=True)
+    env_cfg = {"num_envs": 1, "max_episode_length": 500, "task_mode": "random"}
+    env = Franka3CubeEnvPyBullet(env_cfg, headless=True)
 
     # Initialize annotation dictionary
     auto_lang_ann = {
