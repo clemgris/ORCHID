@@ -360,8 +360,10 @@ class Franka3CubeEnvPyBullet:
 
     def reset_scene(self, scene_obs):
         """Reset environment to specific scene observation"""
-        state = self.parse_state(scene_obs["state"])
-
+        if isinstance(scene_obs, Dict):
+            state = self.parse_state(scene_obs["state"])
+        else:
+            state = self.parse_state(scene_obs)
         # Reset Franka joint positions
         dof_pos = state["dof_pos"].squeeze(0).numpy()
         for i in range(self.franka_num_dofs):
