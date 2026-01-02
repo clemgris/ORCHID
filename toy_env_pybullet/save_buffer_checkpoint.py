@@ -1,5 +1,6 @@
 import argparse
 import os
+import pickle
 import sys
 from functools import partial
 from pathlib import Path
@@ -145,7 +146,7 @@ def main():
     # Save buffer to file
     buffer_name = f"state_buffer_{args.mode}.pkl"
     buffer_save_path = os.path.join(args.data_path, buffer_name)
-    np.save(buffer_save_path, buffer)
+    pickle.dump(buffer, open(buffer_save_path, "wb"))
     print(f"Saved state buffer to {buffer_save_path}")
 
 
