@@ -1,15 +1,21 @@
+# === Standard Library ===
 import argparse
 import logging
 import os
+import pickle
+import shutil
 import sys
-import time
 from pathlib import Path
 
+# === Third-party Libraries ===
 import torch
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import seed_everything
+from tqdm import tqdm
 
+# === Set Up Paths ===
 ROOT_PATH = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT_PATH))  # Top-level project root
 sys.path.extend(
     [
         str(ROOT_PATH),
@@ -17,19 +23,19 @@ sys.path.extend(
         str(ROOT_PATH / "toy_env_pybullet"),
     ]
 )
-
-from flowdiffusion.evaluate_policy.methods.evaluate_policy import (
-    evaluate_policy_singlestep_toy,
-)
+from methods.generate_data import generate_new_data_toy
 from model.hierarchical_model_toy import HierarchicalModel
+from toy_env_pybullet.toyEnv import TASK_NAMES as tasks
 from toy_env_pybullet.toyEnv import Franka3CubeEnvPyBullet
+
+# === Device Setup ===
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    # seed_everything(0, workers=True)
     parser = argparse.ArgumentParser(
-        description="Evaluate a trained model on multistep sequences with language goals."
+        description="Generate new data using a pretrained hierarchical CALVIN model"
     )
 
     parser.add_argument(
@@ -143,14 +149,77 @@ if __name__ == "__main__":
         help="Random seed.",
     )
 
+    parser.add_argument(
+        "--saving_path",
+        type=str,
+        help="Path to save the generated data.",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--num_data",
+        type=int,
+        help="Number of data points to generate.",
+        default=100,
+    )
+
+    parser.add_argument(
+        "--task",
+        type=str,
+        nargs="+",
+        help="Task to generate data for.",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--num_trials",
+        type=int,
+        help="Number of trials per data point.",
+        default=1,
+    )
+
+    parser.add_argument(
+        "--start_idx",
+        type=int,
+        help="Starting index for saving data.",
+        default=0,
+    )
+
+    parser.add_argument(
+        "--buffer_mode",
+        type=str,
+        help="Buffer of initial states",
+        choices=[
+            "start",
+            "start_end_all",
+            "start_all",
+            "episodes",
+            "start_end_others",
+            "end_all",
+        ],
+    )
+
+    parser.add_argument(
+        "--buffer_save_path",
+        type=str,
+        help="Patch to buffer checkpoint",
+        default=None,
+    )
+
     parser.add_argument("--device", default=0, type=int, help="CUDA device")
     args = parser.parse_args()
-    args.save_failures = args.debug_path is not None
 
-    # Set seed
-    seed_everything(args.seed, workers=True)
+    seed_everything(args.seed, workers=True)  # type:ignore
 
-    # Load data config
+    saving_path = args.saving_path
+    os.makedirs(saving_path, exist_ok=True)
+
+    if args.debug_path:
+        # Create debug folder
+        debug_path = Path(args.debug_path)
+        os.makedirs(debug_path, exist_ok=True)
+
+        # Load data config
     policy_data_config = OmegaConf.load(
         os.path.join(args.policy_results_folder, "data_config.yaml")
     )
@@ -184,37 +253,74 @@ if __name__ == "__main__":
             "replan": args.replan,
         }
     )
-
-    print("Config:\n" + OmegaConf.to_yaml(config))
-
-    # Save config
-    os.makedirs(args.eval_folder, exist_ok=True)
-    with open(
-        os.path.join(args.eval_folder, "config.yaml"),
-        "w",
-    ) as f:
-        OmegaConf.save(config, f)
-
-    if args.use_oracle_subgoals:
-        print("Using oracle subgoals")
-    else:
-        print("Using generated subgoals")
-
     device = torch.device("cuda:0")
     config.device = "cuda"
 
-    if args.debug_path:
-        # Create debug folder
-        debug_path = Path(config.debug_path)
-        os.makedirs(debug_path, exist_ok=True)
+    # Initialize state buffer with preloaded states from dataset
+    buffer_save_path = args.buffer_save_path
+    print("Buffer load path:", buffer_save_path)
+    buffer = pickle.load(open(buffer_save_path, "rb"))
+    for task in tasks:
+        print(f"# valid states {task}: {len(buffer)}")
 
     env_cfg = {"num_envs": 1, "max_episode_length": 500, "task_mode": "random"}
     env = Franka3CubeEnvPyBullet(env_cfg, headless=True)
     model = HierarchicalModel(config)
 
-    start_time = time.time()
+    if args.task is None:
+        for task_id, task in tqdm(enumerate(tasks)):
+            generate_new_data_toy(
+                model,
+                env,
+                debug_path=args.debug_path,
+                num_data=args.num_data,
+                task=task,
+                task_id=task_id,
+                saving_path=os.path.join(saving_path, f"training_{args.start_idx}"),
+                num_trials=args.num_trials,
+                state_buffer=buffer,
+                start_idx=args.start_idx,
+            )
+    else:
+        for task in args.task:
+            generate_new_data_toy(
+                model,
+                env,
+                debug_path=args.debug_path,
+                num_data=args.num_data,
+                task=task,
+                task_id=tasks.index(task),
+                saving_path=os.path.join(saving_path, f"training_{args.start_idx}"),
+                num_trials=args.num_trials,
+                state_buffer=buffer,
+                start_idx=args.start_idx,
+            )
 
-    evaluate_policy_singlestep_toy(model, env, args)
+    shutil.copytree(
+        os.path.join(policy_data_config.root, "training", ".hydra"),
+        os.path.join(saving_path, "training", ".hydra"),
+        dirs_exist_ok=True,
+    )
+    shutil.copy2(
+        os.path.join(policy_data_config.root, "training", "statistics.yaml"),
+        os.path.join(saving_path, "training", "statistics.yaml"),
+    )
 
-    elapsed_time = time.time() - start_time
-    print("Evaluation time: ", time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
+    os.makedirs(os.path.join(saving_path, "validation"), exist_ok=True)
+
+    # Copy from training to validation as a placeholder
+    shutil.copy2(
+        os.path.join(
+            saving_path,
+            f"training_{args.start_idx}",
+            f"episode_{(args.start_idx + 1):07d}.npz",
+        ),
+        os.path.join(
+            saving_path, "validation", f"episode_{(args.start_idx + 1):07d}.npz"
+        ),
+    )
+    shutil.copytree(
+        os.path.join(saving_path, f"training_{args.start_idx}", "lang_annotations"),
+        os.path.join(saving_path, "validation", "lang_annotations"),
+        dirs_exist_ok=True,
+    )
