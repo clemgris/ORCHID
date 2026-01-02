@@ -14,6 +14,7 @@ sys.path.extend(
     [
         str(ROOT_PATH),
         str(ROOT_PATH / "flowdiffusion"),
+        str(ROOT_PATH / "calvin/calvin_models"),
         str(ROOT_PATH / "toy_env_pybullet"),
     ]
 )
