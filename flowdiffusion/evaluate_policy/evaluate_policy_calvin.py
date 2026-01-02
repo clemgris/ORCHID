@@ -107,7 +107,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--debug_path",
         type=str,
-        default="/home/grislain/AVDC/debug",
+        default=None,
         help="Path to save debug images.",
     )
 

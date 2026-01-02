@@ -15,6 +15,8 @@ sys.path.extend(
         str(ROOT_PATH),
         str(ROOT_PATH / "flowdiffusion"),
         str(ROOT_PATH / "calvin/calvin_models"),
+        str(ROOT_PATH / "toy_env_pybullet"),
+        str(ROOT_PATH / "toy_env_pybullet/toyEnv"),
     ]
 )
 
@@ -203,6 +205,32 @@ def rollout_toy(env, model, task, task_id, reward_fn, debug_path=None):
                 subgoals.append(model.sub_goals[0, :, 0])
                 init.append(model.init_subgoal_gen[0])
         if reward > 0.5:
+            if debug_path:
+                os.makedirs(debug_path + "/success/", exist_ok=True)
+                success_idx = len(os.listdir(debug_path + "/success/"))
+                success_episode_path = os.path.join(
+                    debug_path,
+                    f"success/succeed_{task.replace(' ', '_')}_{success_idx}",
+                )
+                os.makedirs(
+                    success_episode_path,
+                    exist_ok=True,
+                )
+                # Save episode (as png)
+                torchvision.utils.save_image(
+                    (torch.stack(obs_list)).float(),
+                    os.path.join(
+                        success_episode_path,
+                        "trajectory.png",
+                    ),
+                )
+                # Save episode (as gif)
+                save_gif(
+                    obs_list,
+                    os.path.join(success_episode_path, "trajectory.gif"),
+                    duration=1.0,
+                    norm=False,
+                )
             print(colored("S", "green"), end=" ")
             return True, step
     print(colored("F", "red"), end=" ")
