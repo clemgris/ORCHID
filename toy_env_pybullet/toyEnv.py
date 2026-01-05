@@ -295,12 +295,12 @@ class Franka3CubeEnvPyBullet:
             "C": 0,
         }
 
+        # Reset Franka to default position
+        for i, pos in enumerate(self.franka_default_joints):
+            p.resetJointState(self.franka_id, i, pos, targetVelocity=0.0)
         if scene_obs is not None:
             return self.reset_scene(scene_obs)
         else:
-            # Reset Franka to default position
-            for i, pos in enumerate(self.franka_default_joints):
-                p.resetJointState(self.franka_id, i, pos, targetVelocity=0.0)
             # Reset cubes to random positions on table
             table_size = 0.2
             margin = 0.05 * table_size
