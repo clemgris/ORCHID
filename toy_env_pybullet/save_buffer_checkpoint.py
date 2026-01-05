@@ -106,10 +106,12 @@ def main():
     env = Franka3CubeEnvPyBullet(env_cfg, headless=True)
 
     buffer = []
-
     if args.mode == "end_all":
-        for start, end in dict_ann["info"]["indx"]:
-            if dict_ann["language"]["task"] == "stack":
+        for task, (start, end) in zip(
+            dict_ann["language"]["task"], dict_ann["info"]["indx"]
+        ):
+            breakpoint()
+            if task == "stack":
                 pass  # Skip stacking tasks for now
             else:
                 # load last frame
