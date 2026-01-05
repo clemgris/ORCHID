@@ -109,23 +109,26 @@ def main():
 
     if args.mode == "end_all":
         for start, end in dict_ann["info"]["indx"]:
-            # load last frame
-            episode_path = os.path.join(args.data_path, f"episode_{end:07d}.npz")
-            frame = np.load(episode_path)
-            scene_obs = frame["states"]
-            buffer.append(scene_obs)
+            if dict_ann["language"]["task"] == "stack":
+                pass  # Skip stacking tasks for now
+            else:
+                # load last frame
+                episode_path = os.path.join(args.data_path, f"episode_{end:07d}.npz")
+                frame = np.load(episode_path)
+                scene_obs = frame["states"]
+                buffer.append(scene_obs)
 
-            # # DEBUG
-            # obs = env.reset(scene_obs=torch.tensor(scene_obs))
-            # torchvision.utils.save_image(
-            #     torch.tensor(obs["pixels"]),
-            #     "env_reset.png",
-            # )
-            # torchvision.utils.save_image(
-            #     torch.tensor(frame["rgb_static"]).permute(2, 0, 1), "data.png"
-            # )
-            # breakpoint()
-            # # DEBUG
+                # # DEBUG
+                # obs = env.reset(scene_obs=torch.tensor(scene_obs))
+                # torchvision.utils.save_image(
+                #     torch.tensor(obs["pixels"]),
+                #     "env_reset.png",
+                # )
+                # torchvision.utils.save_image(
+                #     torch.tensor(frame["rgb_static"]).permute(2, 0, 1), "data.png"
+                # )
+                # breakpoint()
+                # # DEBUG
     elif args.mode == "reset":
         for _ in range(2000):
             obs = env.reset()
