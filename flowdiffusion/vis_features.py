@@ -12,7 +12,7 @@ root_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.append(root_path)
 sys.path.append(os.path.join(root_path, "flowdiffusion"))
 
-from encoder import ViTEncoder
+# from encoder import ViTEncoder
 
 # def pca_project_features(patch_emb):
 #     """
@@ -126,31 +126,32 @@ def main(images, patch_emb, output_dir="pca_outputs"):
 
 
 if __name__ == "__main__":
-    image_path = "/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset/training/episode_0358483.npz"
-    features_path = "/home/grislain/AVDC/flowdiffusion/features.pt"
+    print("hello")
+    # image_path = "/home/grislain/AVDC/calvin/dataset/calvin_debug_dataset/training/episode_0358483.npz"
+    # features_path = "/home/grislain/AVDC/flowdiffusion/features.pt"
 
-    # Load raw image
-    image = np.load(image_path)["rgb_static"]
-    image = Image.fromarray(image.astype(np.uint8))
+    # # Load raw image
+    # image = np.load(image_path)["rgb_static"]
+    # image = Image.fromarray(image.astype(np.uint8))
 
-    # Load encoder
-    encoder_model = ViTEncoder()
-    image_size = 224 * 4
+    # # Load encoder
+    # encoder_model = ViTEncoder()
+    # image_size = 224 * 4
 
-    # Image transform
-    transforms = T.Compose(
-        [
-            T.Resize(image_size),
-            T.CenterCrop((image_size, image_size)),
-            T.ToTensor(),
-            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ]
-    )
+    # # Image transform
+    # transforms = T.Compose(
+    #     [
+    #         T.Resize(image_size),
+    #         T.CenterCrop((image_size, image_size)),
+    #         T.ToTensor(),
+    #         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    #     ]
+    # )
 
-    transformed_image = transforms(image)[None]
-    _, features = encoder_model(transformed_image.to("cuda"))
-    # features = F.normalize(features, dim=-1)
-    if isinstance(features, torch.Tensor):
-        features = features.cpu().numpy()
-    # Run PCA visualization
-    main(transformed_image.cpu(), features)
+    # transformed_image = transforms(image)[None]
+    # _, features = encoder_model(transformed_image.to("cuda"))
+    # # features = F.normalize(features, dim=-1)
+    # if isinstance(features, torch.Tensor):
+    #     features = features.cpu().numpy()
+    # # Run PCA visualization
+    # main(transformed_image.cpu(), features)

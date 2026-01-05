@@ -31,11 +31,11 @@ from lorel.expert_dataset import ExpertDataset, TrajDataset  # noqa: E402, F401
 
 def main(args):
     if args.server == "hacienda":
-        root_path = "/home/grislain/SkillDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_1k.pkl"
-        num_data = 100
+        root_path = "/home/grislain/SkillDiffuser/lorel/data/jul_26_sawyer_1k/jul_26_sawyer_1k.pkl"
+        num_data = 1000
     elif args.server == "jz":
         root_path = "/lustre/fsn1/projects/rech/fch/uxv44vw/TrajectoryDiffuser/lorel/data/dec_24_sawyer_50k/dec_24_sawyer_50k/dec_24_sawyer_50k.pkl"
-        num_data = 38225
+        num_data = 50000
     else:
         raise ValueError(f"Unknown server {args.server}")
     cfg = DictConfig(

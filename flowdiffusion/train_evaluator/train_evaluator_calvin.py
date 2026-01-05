@@ -3,9 +3,6 @@ import os
 import sys
 from pathlib import Path
 
-import numpy as np
-from tqdm import tqdm
-
 root_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(root_path)
 sys.path.append(
@@ -171,55 +168,57 @@ def main(args):
     for epoch in range(num_epochs):
         all_losses = []
         all_metric = []
-        for batch in tqdm(train_dataloader, desc="Training", leave=False):
+        for (
+            batch
+        ) in train_dataloader:  # tqdm(train_dataloader, desc="Training", leave=False):
             episode, text_task, sucess = batch
             breakpoint()
-            pred_loggits = evaluator(episode.to(device), text_task)
+            # pred_loggits = evaluator(episode.to(device), text_task)
 
-            # Loss
-            loss = criterion(pred_loggits, sucess.to(device))
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            all_losses.append(loss.item())
+        #     # Loss
+        #     loss = criterion(pred_loggits, sucess.to(device))
+        #     loss.backward()
+        #     optimizer.step()
+        #     optimizer.zero_grad()
+        #     all_losses.append(loss.item())
 
-            # Metric
-            pred_sucess = torch.argmax(pred_loggits, dim=1)
-            metric = torch.mean((pred_sucess == sucess.to(device)).float())
-            all_metric.append(metric.item())
+        #     # Metric
+        #     pred_sucess = torch.argmax(pred_loggits, dim=1)
+        #     metric = torch.mean((pred_sucess == sucess.to(device)).float())
+        #     all_metric.append(metric.item())
 
-        if epoch % log_freq == 0:
-            print(
-                f"Train | epoch: {epoch} loss: {np.mean(all_losses):.3f} metric: {np.mean(all_metric):.3f}"
-            )
+        # if epoch % log_freq == 0:
+        #     print(
+        #         f"Train | epoch: {epoch} loss: {np.mean(all_losses):.3f} metric: {np.mean(all_metric):.3f}"
+        #     )
 
-        if epoch % cfg.save_every == 0:
-            # Save model
-            saving_path = os.path.join(
-                results_folder, f"model-{epoch // cfg.save_every}.pt"
-            )
-            torch.save(evaluator.state_dict(), saving_path)
+        # if epoch % cfg.save_every == 0:
+        #     # Save model
+        #     saving_path = os.path.join(
+        #         results_folder, f"model-{epoch // cfg.save_every}.pt"
+        #     )
+        #     torch.save(evaluator.state_dict(), saving_path)
 
-        if epoch % cfg.eval_every == 0:
-            evaluator.eval()
-            all_eval_losses = []
-            all_eval_metric = []
-            for batch in val_dataloader:
-                episode, text_task, sucess = batch
-                pred_loggits = evaluator(episode.to(device), text_task)
+        # if epoch % cfg.eval_every == 0:
+        #     evaluator.eval()
+        #     all_eval_losses = []
+        #     all_eval_metric = []
+        #     for batch in val_dataloader:
+        #         episode, text_task, sucess = batch
+        #         pred_loggits = evaluator(episode.to(device), text_task)
 
-                # Loss
-                loss = criterion(pred_loggits, sucess.to(device))
-                all_eval_losses.append(loss.item())
+        #         # Loss
+        #         loss = criterion(pred_loggits, sucess.to(device))
+        #         all_eval_losses.append(loss.item())
 
-                # Metric
-                pred_sucess = torch.argmax(pred_loggits, dim=1)
-                metric = torch.mean((pred_sucess == sucess.to(device)).float())
-                all_eval_metric.append(metric.item())
+        #         # Metric
+        #         pred_sucess = torch.argmax(pred_loggits, dim=1)
+        #         metric = torch.mean((pred_sucess == sucess.to(device)).float())
+        #         all_eval_metric.append(metric.item())
 
-            print(
-                f"Eval | epoch: {epoch} eval loss: {np.mean(all_eval_losses):.3f} eval metric: {np.mean(all_eval_metric):.3f}"
-            )
+        #     print(
+        #         f"Eval | epoch: {epoch} eval loss: {np.mean(all_eval_losses):.3f} eval metric: {np.mean(all_eval_metric):.3f}"
+        #     )
 
 
 if __name__ == "__main__":

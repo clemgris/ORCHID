@@ -31,13 +31,11 @@ from transformers import (
 sys.path.append(
     os.path.join(
         root_path,
-        "calvin/calvin_models",
+        "toy_env_pybullet/dataset",
     )
 )
 
-from calvin.calvin_models.calvin_agent.datasets.calvin_data_module import (
-    CalvinDataModule,  # noqa: E402
-)
+from toy_env_pybullet.dataset.dataset import ToyActionDataset
 
 print(f"CUDA available: {torch.cuda.is_available()}")
 print(f"Total GPUs available: {torch.cuda.device_count()}")
@@ -48,12 +46,12 @@ def main(args):
     pretrained_results_folder = args.pretrained_results_folder
     ft_data_path = args.ft_data_path
 
+    print("Training on ", len(ft_data_path), " datasets.")
+
     if args.train_on == "lang":
         dataset_name = "lang_dataset"
-        dataset_key = "lang"
     elif args.train_on == "vis":
         dataset_name = "vis_dataset"
-        dataset_key = "vis"
     else:
         raise ValueError(f"Unknown dataset name {args.train_on}")
     print(f"Training on {dataset_name} dataset")
@@ -64,55 +62,30 @@ def main(args):
     cfg = DictConfig(
         {
             "root": ft_data_path,
-            "datamodule": {
-                dataset_name: {
-                    "_target_": "calvin_agent.datasets.disk_dataset.DiskActionDataset",
-                    "key": dataset_key,
-                    "save_format": "npz",
-                    "batch_size": args.batch_size,
-                    "min_window_size": 32,
-                    "max_window_size": 65,
-                    "proprio_state": {
-                        "n_state_obs": 8,
-                        "keep_indices": [[0, 7], [14, 15]],
-                        "robot_orientation_idx": [3, 6],
-                        "normalize": True,
-                        "normalize_robot_orientation": True,
-                    },
-                    "obs_space": {
-                        "rgb_obs": ["rgb_static", "rgb_gripper"]
-                        if args.use_gripper
-                        else ["rgb_static"],
-                        "depth_obs": (
-                            ["depth_static"]
-                            if (args.use_depth and not args.use_gripper)
-                            else ["depth_static", "depth_gripper"]
-                            if (args.use_depth and args.use_gripper)
-                            else []
-                        ),
-                        "state_obs": ["robot_obs"],
-                        "actions": ["actions"],
-                        "language": ["language"],
-                    },
-                    "num_subgoals": args.num_subgoals,
-                    "pad": True,
-                    "lang_folder": "lang_annotations"
-                    if args.server == "hacienda"
-                    else "new_lang_annotations",
-                    "num_workers": 2,
-                    "norm_feat": args.norm,
-                    "prob_aug": args.data_aug_prob,
-                    "feat_patch_size": args.feat_patch_size,
-                    "without_guidance": args.without_guidance,
-                    "goal": goal,
-                    "obs": obs,
+            "dataset": {
+                "batch_size": args.batch_size,
+                "min_window_size": 32,
+                "max_window_size": 65,
+                "obs_space": {
+                    "rgb_static": ["rgb_static"],
+                    "states": ["states"],
+                    "actions": ["actions"],
+                    "language": ["language"],
                 },
+                "num_subgoals": args.num_subgoals,
+                "pad": True,
+                "lang_folder": "lang_annotations",
+                "auto_lang_name": "auto_lang_ann",
+                "goal": goal,
+                "obs": obs,
+                "norm_feat": args.norm,
             },
-            "training_steps": args.checkpoint_num * 100
-            + args.training_steps,  # In gradient steps
+            "training_steps": args.training_steps,  # In gradient steps
             "save_every": 100,  # In gradient steps
-            "use_text": args.use_text,
             "text_encoder": args.text_encoder,
+            "use_text": args.use_text,
+            "pretrained_model": pretrained_results_folder,
+            "pretrained_checkpoint_num": args.checkpoint_num,
         }
     )
 
@@ -123,18 +96,11 @@ def main(args):
     transforms = OmegaConf.load(
         os.path.join(
             root_path,
-            "calvin/calvin_models/conf/datamodule/transforms/play_basic.yaml",
+            "toy_env_pybullet/conf/transforms.yaml",
         )
     )
 
-    data_modules = []
-    for path in ft_data_path:
-        data_module = CalvinDataModule(
-            cfg.datamodule, transforms=transforms, root_data_dir=path
-        )
-        data_module.setup()
-        data_modules.append(data_module)
-    results_folder = Path(results_folder)
+    cfg.dataset.transforms = transforms
 
     results_folder = Path(results_folder)
 
@@ -147,15 +113,13 @@ def main(args):
     print("Results folder:", results_folder)
 
     train_sets = []
-    val_sets = []
-    for data_module in data_modules:
-        train_sets.append(data_module.train_datasets[dataset_key])
-        val_sets.append(data_module.val_datasets[dataset_key])
+    for path in ft_data_path:
+        train_set = ToyActionDataset(path, cfg.dataset)
+        train_sets.append(train_set)
     train_set = torch.utils.data.ConcatDataset(train_sets)
-    valid_set = torch.utils.data.ConcatDataset(val_sets)
 
     print("Train data:", len(train_set))
-    print("Valid data:", len(valid_set))
+    print("Valid data:", 0)
 
     training_steps = cfg.training_steps
     device = torch.device("cuda")
@@ -236,10 +200,7 @@ def main(args):
         {
             "n_obs_steps": 1,
             "horizon": int(
-                np.ceil(
-                    cfg.datamodule[dataset_name]["max_window_size"]
-                    / cfg.datamodule[dataset_name]["num_subgoals"]
-                )
+                np.ceil(cfg.dataset["max_window_size"] / cfg.dataset["num_subgoals"])
             )
             - 1,
             "input_shapes": {
@@ -301,7 +262,7 @@ def main(args):
         allowed_mismatch = [
             "training_steps",
             "root",
-            "datamodule",
+            "dataset",
         ]  # Allow mismatch for training steps
         for key in cfg.keys():
             if key not in checkpoint_cfg:
@@ -316,6 +277,7 @@ def main(args):
             f"Keys {mismatching_keys} are not in the allowed mismatch list {allowed_mismatch}"
         )
 
+        # Load training statistics
         stats_path = checkpoint_cfg.stats_path
         if os.path.exists(stats_path):
             train_stats = OmegaConf.load(stats_path)
@@ -329,11 +291,15 @@ def main(args):
                 "min": torch.Tensor(train_stats.act_min_bound),
             }
         }
-        cfg["pretrained_results_folder"] = pretrained_results_folder
+
+        cfg["stats_path"] = stats_path
+
         with open(os.path.join(results_folder, "data_config.yaml"), "w") as file:
             file.write(OmegaConf.to_yaml(cfg))
     else:
-        raise ValueError("Need checkpoint to fine-tuned")
+        raise ValueError(
+            "Fine-tuning from a pretrained model requires a checkpoint num."
+        )
 
     policy = DiffusionPolicy(diff_cfg, dataset_stats=train_stats_dict)
 
@@ -356,7 +322,7 @@ def main(args):
     dataloader = torch.utils.data.DataLoader(
         train_set,
         num_workers=4 if args.server == "hacienda" else 8,
-        batch_size=cfg.datamodule[dataset_name]["batch_size"],
+        batch_size=cfg.dataset["batch_size"],
         shuffle=True,
         pin_memory=device != torch.device("cpu"),
         drop_last=True,
@@ -433,16 +399,16 @@ if __name__ == "__main__":
         default="/home/grislain/AVDC/calvin/models/LL_RGB",
     )  # set to path to pretrained model results folder
     parser.add_argument(
-        "-c", "--checkpoint_num", type=int, default=9999
+        "-c", "--checkpoint_num", type=int, default=None
     )  # set to checkpoint number to resume training or generate samples
     parser.add_argument(
-        "--training_steps", type=int, default=5000
+        "--training_steps", type=int, default=500000
     )  # set to number of training steps
     parser.add_argument(
         "--ft_data_path",
         type=str,
         nargs="+",
-        default="/home/grislain/AVDC/gen_new_data",
+        default=["/home/grislain/AVDC/data/toy_env_demos/training"],
     )  # set to path to dataset
     parser.add_argument(
         "-r", "--results_folder", type=str, default="../results_policy_single/calvin"
@@ -476,7 +442,7 @@ if __name__ == "__main__":
         choices=["pixel", "dino_vit", "dino", "r3m"],
     )  # set to observation type for diffusion (pixel, dino_vit, dino, r3m)
     parser.add_argument(
-        "--feat_patch_size", type=int, default=14
+        "--feat_patch_size", type=int, default=16
     )  # set to feature patch size for dino features
     parser.add_argument(
         "--norm", type=str, default=None, choices=[None, "l2", "z_score", "min_max"]
