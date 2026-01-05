@@ -73,6 +73,8 @@ if __name__ == "__main__":
     # Merge lang_annotation
     for folder in training_folders:
         lang_file = folder / "lang_annotations/auto_lang_ann.npy"
+        if lang_file.exists() is False:
+            lang_file = folder / "lang_ann.npy"
         ann = np.load(lang_file, allow_pickle=True).item()
         for keys in auto_lang_ann.keys():
             for sub_keys in auto_lang_ann[keys].keys():
