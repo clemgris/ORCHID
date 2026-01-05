@@ -110,7 +110,6 @@ def main():
         for task, (start, end) in zip(
             dict_ann["language"]["task"], dict_ann["info"]["indx"]
         ):
-            breakpoint()
             if task == "stack":
                 pass  # Skip stacking tasks for now
             else:
