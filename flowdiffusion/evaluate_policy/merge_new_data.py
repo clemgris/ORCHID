@@ -1,6 +1,7 @@
 # === Standard Library ===
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -60,6 +61,12 @@ if __name__ == "__main__":
         help="Path to the CALVIN dataset.",
     )
 
+    parser.add_argument(
+        "--ann_folder_name",
+        type=str,
+        default="new_lang_annotations",
+    )
+
     args = parser.parse_args()
 
     saving_path = Path(args.saving_path)
@@ -75,15 +82,11 @@ if __name__ == "__main__":
         lang_file = folder / "lang_annotations/auto_lang_ann.npy"
         if lang_file.exists() is False:
             lang_file = folder / "lang_ann.npy"
-        ann = np.load(lang_file, allow_pickle=True).item()
-        for keys in auto_lang_ann.keys():
-            for sub_keys in auto_lang_ann[keys].keys():
-                auto_lang_ann[keys][sub_keys].extend(ann[keys][sub_keys])
-        # # Delete lang_annotation folder
-        # lang_folder = folder / "lang_annotations"
-        # for file in lang_folder.iterdir():
-        #     file.unlink()
-        # lang_folder.rmdir()
+        if os.path.exists(lang_file):
+            ann = np.load(lang_file, allow_pickle=True).item()
+            for keys in auto_lang_ann.keys():
+                for sub_keys in auto_lang_ann[keys].keys():
+                    auto_lang_ann[keys][sub_keys].extend(ann[keys][sub_keys])
 
     # Assert no overlap in episode indices
     all_start_end = auto_lang_ann["info"]["indx"]
@@ -94,7 +97,7 @@ if __name__ == "__main__":
         )
 
     # Save
-    lang_save_path = saving_path / "training" / "lang_annotations"
+    lang_save_path = saving_path / "training" / args.ann_folder_name
     lang_save_path.mkdir(exist_ok=True)
     np.save(lang_save_path / "auto_lang_ann.npy", auto_lang_ann)
 
@@ -109,4 +112,3 @@ if __name__ == "__main__":
         for file in episode_files:
             new_path = saving_path / "training" / file.name
             file.rename(new_path)
-        # folder.rmdir()
