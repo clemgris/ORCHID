@@ -80,7 +80,8 @@ def main(args):
                 "obs": obs,
                 "norm_feat": args.norm,
             },
-            "training_steps": args.training_steps,  # In gradient steps
+            "training_steps": args.checkpoint_num * 100
+            + args.training_steps,  # In gradient steps
             "save_every": 100,  # In gradient steps
             "text_encoder": args.text_encoder,
             "use_text": args.use_text,

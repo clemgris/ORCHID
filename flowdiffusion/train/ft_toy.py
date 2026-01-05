@@ -280,7 +280,8 @@ def main(args):
         train_set=train_set,
         valid_set=train_set,
         train_lr=1e-4,
-        train_num_steps=cfg.train_num_steps,
+        train_num_steps=cfg.train_num_steps
+        + args.checkpoint_num * cfg.save_and_sample_every,
         save_and_sample_every=cfg.save_and_sample_every,
         ema_update_every=10,
         ema_decay=0.999,
@@ -361,6 +362,12 @@ if __name__ == "__main__":
         nargs="+",
         default=["/home/grislain/AVDC/data/toy_env_demos/training"],
     )  # set to data path
+    parser.add_argument(
+        "--pretrained_results_folder",
+        type=str,
+        help="Path to pretrained model results folder.",
+        default=None,
+    )  # set to pretrained model results folder
     parser.add_argument(
         "--train_num_steps", type=int, default=150000
     )  # set to number of training steps
