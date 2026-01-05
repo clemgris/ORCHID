@@ -166,7 +166,9 @@ def generate_new_data_toy(
     Returns:
         0 on success
     """
-    ann_saving_path = os.path.join(saving_path, "auto_lang_ann.npy")
+    ann_saving_path = os.path.join(saving_path, "lang_annotations/auto_lang_ann.npy")
+    if not os.path.exists(ann_saving_path):
+        ann_saving_path = os.path.join(saving_path, "auto_lang_ann.npy")
     dirpath = os.path.dirname(ann_saving_path)
     os.makedirs(dirpath, exist_ok=True)
 
@@ -236,7 +238,7 @@ def generate_new_data_toy(
         "Created",
         success_counter,
         "successful episodes out of",
-        len(state_buffer.valid_idx[task]),
+        len(state_buffer),
         "initial states for the task",
         task,
         "at",
