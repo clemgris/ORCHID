@@ -365,9 +365,9 @@ class Franka3CubeEnvPyBullet:
         else:
             state = self.parse_state(scene_obs)
         # Reset Franka joint positions
-        dof_pos = state["dof_pos"].squeeze(0).numpy()
-        for i in range(self.franka_num_dofs):
-            p.resetJointState(self.franka_id, i, dof_pos[i], targetVelocity=0.0)
+        # dof_pos = state["dof_pos"].squeeze(0).numpy()
+        # for i in range(self.franka_num_dofs):
+        #     p.resetJointState(self.franka_id, i, dof_pos[i], targetVelocity=0.0)
         # Reset cube positions
         cube_positions = [
             state["cube_a_pos"].squeeze(0).numpy(),
