@@ -75,7 +75,12 @@ def process_actions(
         seq_acts = torch.from_numpy(
             episode[action_key][seq_idx : seq_idx + window_size]
         ).float()
-    return {"actions": seq_acts[:, 0, :]}
+    if seq_acts.dim() == 2:
+        return {"actions": seq_acts[:, :]}
+    elif seq_acts.dim() == 3:
+        return {"actions": seq_acts[:, 0, :]}
+    else:
+        raise ValueError(f"Unsupported action dimension {seq_acts.dim()}")
 
 
 def process_language(
