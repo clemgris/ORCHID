@@ -44,6 +44,7 @@ class ToyDataset(Dataset):
         self.pad = True
         self.with_lang = True
         self.feat_stats = None
+        self.lang_folder = "lang_annotations"
 
         self.episode_lookup, self.lang_lookup, self.lang_ann, self.lang_task = (
             self._build_file_indices_lang(self.abs_datasets_dir)
@@ -310,6 +311,7 @@ class ToyActionDataset(Dataset):
         self.pad = True
         self.with_lang = True
         self.feat_stats = None
+        self.lang_folder = "lang_annotations"
 
         self.episode_lookup, self.lang_lookup, self.lang_ann, self.lang_task = (
             self._build_file_indices_lang(self.abs_datasets_dir)
