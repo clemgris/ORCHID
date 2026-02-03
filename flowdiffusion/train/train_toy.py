@@ -35,6 +35,12 @@ sys.path.append(
         "toy_env_pybullet/dataset",
     )
 )
+sys.path.append(
+    os.path.join(
+        root_path,
+        "calvin/calvin_models",
+    )
+)
 
 from toy_env_pybullet.dataset.dataset import ToyDataset
 

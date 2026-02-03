@@ -35,6 +35,12 @@ sys.path.append(
         "toy_env_pybullet/dataset",
     )
 )
+sys.path.append(
+    os.path.join(
+        root_path,
+        "calvin/calvin_models",
+    )
+)
 
 from toy_env_pybullet.dataset.dataset import ToyDataset
 
@@ -124,14 +130,18 @@ def main(args):
         raise ValueError("Must provide a pretrained model to finetune from.")
     else:
         # Load checkpoint config
-        allowed_mismatch = ["train_num_steps", "root", "dataset"]
+        allowed_mismatch = ["train_num_steps", 
+                            "root", 
+                            "dataset", 
+                            "pretrained_results_folder",
+                            "pretrained_checkpoint_num"]
         mismatching_keys = []
-        with open(os.path.join(results_folder, "data_config.yaml"), "r") as file:
+        with open(os.path.join(pretrained_results_folder, "data_config.yaml"), "r") as file:
             checkpoint_cfg = OmegaConf.load(file)
         for key in cfg.keys():
             if key not in checkpoint_cfg:
                 print(f"Missing key {key} not in checkpoint config.")
-                raise ValueError(f"Key {key} not in checkpoint config.")
+                mismatching_keys.append(key)
             elif cfg[key] != checkpoint_cfg[key]:
                 print(
                     f"Key {key} has different value in checkpoint config {checkpoint_cfg[key]} != {cfg[key]}"

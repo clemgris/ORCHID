@@ -34,7 +34,12 @@ sys.path.append(
         "toy_env_pybullet/dataset",
     )
 )
-
+sys.path.append(
+    os.path.join(
+        root_path,
+        "calvin/calvin_models",
+    )
+)
 from toy_env_pybullet.dataset.dataset import ToyActionDataset
 
 print(f"CUDA available: {torch.cuda.is_available()}")
@@ -264,6 +269,8 @@ def main(args):
             "training_steps",
             "root",
             "dataset",
+            "pretrained_model",
+            "pretrained_checkpoint_num"
         ]  # Allow mismatch for training steps
         for key in cfg.keys():
             if key not in checkpoint_cfg:

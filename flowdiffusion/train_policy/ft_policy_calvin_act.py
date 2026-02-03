@@ -110,7 +110,8 @@ def main(args):
                     "obs": obs,
                 },
             },
-            "training_steps": args.training_steps,  # In gradient steps
+            "training_steps": args.checkpoint_num * 100
+            + args.training_steps,  # In gradient steps
             "save_every": 100,  # In gradient steps
             "use_text": args.use_text,
             "text_encoder": args.text_encoder,
@@ -310,7 +311,7 @@ def main(args):
 
         # Check if cfg and checkpoint_cfg align
         mismatching_keys = []
-        allowed_mismatch = ["training_steps"]  # Allow mismatch for training steps
+        allowed_mismatch = ["training_steps", 'root', 'training_steps', 'stats_path', 'pretrained_results_folder']  # Allow mismatch for training steps
         for key in cfg.keys():
             if key not in checkpoint_cfg:
                 mismatching_keys.append(key)

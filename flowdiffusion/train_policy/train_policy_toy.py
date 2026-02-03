@@ -35,6 +35,13 @@ sys.path.append(
     )
 )
 
+sys.path.append(
+    os.path.join(
+        root_path,
+        "calvin/calvin_models",
+    )
+)
+
 from toy_env_pybullet.dataset.dataset import ToyActionDataset
 
 print(f"CUDA available: {torch.cuda.is_available()}")
