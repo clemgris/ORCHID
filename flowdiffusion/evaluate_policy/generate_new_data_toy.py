@@ -191,11 +191,7 @@ if __name__ == "__main__":
         type=str,
         help="Buffer of initial states",
         choices=[
-            "start",
-            "start_end_all",
-            "start_all",
-            "episodes",
-            "start_end_others",
+            "reset",
             "end_all",
         ],
     )

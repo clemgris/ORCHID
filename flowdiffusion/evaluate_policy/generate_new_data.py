@@ -9,7 +9,7 @@ from pathlib import Path
 # === Third-party Libraries ===
 import hydra
 import torch
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, ListConfig
 from pytorch_lightning import seed_everything
 from tqdm import tqdm
 
@@ -20,6 +20,7 @@ sys.path.extend(
     [
         str(ROOT_PATH / "flowdiffusion"),
         str(ROOT_PATH / "calvin/calvin_models"),
+        str(ROOT_PATH / "toy_env_pybullet"),
     ]
 )
 
@@ -60,6 +61,13 @@ if __name__ == "__main__":
     seed_everything(0, workers=True)  # type:ignore
     parser = argparse.ArgumentParser(
         description="Generate new data using a pretrained hierarchical CALVIN model"
+    )
+
+    parser.add_argument(
+        "--buffer_save_path",
+        type=str,
+        help="Patch to buffer checkpoint",
+        default=None,
     )
 
     parser.add_argument(
@@ -165,7 +173,17 @@ if __name__ == "__main__":
             "episodes",
             "start_end_others",
             "end_all",
+            "reset",
+            "true_reset"
         ],
+    )
+
+    parser.add_argument(
+        "--policy_model",
+        type=str,
+        default="diffusion",
+        choices=["diffusion", "act"],
+        help="Policy model to use.",
     )
 
     parser.add_argument("--device", default=0, type=int, help="CUDA device")
@@ -203,6 +221,10 @@ if __name__ == "__main__":
     high_level_data_config = OmegaConf.load(
         os.path.join(args.high_level_results_folder, "data_config.yaml")
     )
+    
+    if isinstance(policy_data_config.root, ListConfig):
+        policy_data_config.root = policy_data_config.root[0]
+    
     config = DictConfig(
         {
             "policy": {
@@ -242,7 +264,7 @@ if __name__ == "__main__":
     data_module = CalvinDataModule(
         policy_data_config.datamodule,
         transforms=image_transforms_dict,
-        root_data_dir=policy_data_config.root,
+        root_data_dir = policy_data_config.root,
     )
     data_module.setup()
 
@@ -281,9 +303,12 @@ if __name__ == "__main__":
 
     # Initialize state buffer with preloaded states from dataset
     buffer = StateBuffer(tasks.keys(), max_size=1e6)
-    buffer_save_path = os.path.join(
-        policy_dataset.abs_datasets_dir, f"state_buffer_{args.buffer_mode}.pkl"
-    )
+    if args.buffer_save_path is None:
+        buffer_save_path = os.path.join(
+            policy_dataset.abs_datasets_dir, f"state_buffer_{args.buffer_mode}.pkl"
+        )
+    else:
+        buffer_save_path = args.buffer_save_path
     print("Buffer load path:", buffer_save_path)
     buffer.load(buffer_save_path)
     for task in tasks.keys():
@@ -345,6 +370,6 @@ if __name__ == "__main__":
     )
     shutil.copytree(
         os.path.join(saving_path, f"training_{args.start_idx}", "lang_annotations"),
-        os.path.join(saving_path, "validation", "lang_annotations"),
+        os.path.join(saving_path, "validation", "new_lang_annotations"),
         dirs_exist_ok=True,
     )
