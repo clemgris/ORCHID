@@ -81,7 +81,7 @@ if __name__ == "__main__":
     for folder in training_folders:
         lang_file = folder / "lang_annotations/auto_lang_ann.npy"
         if lang_file.exists() is False:
-            lang_file = folder / "lang_ann.npy"
+            lang_file = folder / "auto_lang_ann.npy"
         if os.path.exists(lang_file):
             ann = np.load(lang_file, allow_pickle=True).item()
             for keys in auto_lang_ann.keys():
@@ -98,13 +98,14 @@ if __name__ == "__main__":
 
     # Save
     lang_save_path = saving_path / "training" / args.ann_folder_name
-    lang_save_path.mkdir(exist_ok=True)
+    lang_save_path.mkdir(parents=True, exist_ok=True)
     np.save(lang_save_path / "auto_lang_ann.npy", auto_lang_ann)
 
     # Print stats
-    for tasks in tasks.keys():
-        num_ann = sum(1 for task in auto_lang_ann["language"]["task"] if task == tasks)
-        print(f"Number of annotations for task {tasks}: {num_ann}")
+    unique_tasks = set(auto_lang_ann["language"]["task"])
+    for task in unique_tasks:
+        num_ann = sum(1 for t in auto_lang_ann["language"]["task"] if t == task)
+        print(f"Number of annotations for task {task}: {num_ann}")
 
     # Move all the files with name start with 'episode_' in folders 'training_*' to training
     for folder in training_folders:
