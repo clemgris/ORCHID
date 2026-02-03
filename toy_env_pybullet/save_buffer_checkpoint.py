@@ -98,7 +98,9 @@ def main():
 
     args = parser.parse_args()
 
-    dict_path = os.path.join(args.data_path, "auto_lang_ann.npy")
+    dict_path = os.path.join(args.data_path, "lang_annotations//auto_lang_ann.npy")
+    if not os.path.exists(dict_path):
+        dict_path = os.path.join(args.data_path, "auto_lang_ann.npy")
     dict_ann = np.load(dict_path, allow_pickle=True).item()
 
     # Initialize state buffer
