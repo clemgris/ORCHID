@@ -67,6 +67,36 @@ def rollout_with_oracle(
 
         if len(current_task_info) > 0:
             print(colored("S", "green"), end=" ")
+            ## DEBUG
+            # Create folder for successful episode
+            #os.makedirs(args.debug_path, exist_ok=True)
+            #success_episode_path = os.path.join(
+            #    args.debug_path, f"success_{task.replace(' ', '_')}_{episode['idx']}"
+            #)
+            #os.makedirs(
+            #    success_episode_path,
+            #    exist_ok=True,
+            #)
+
+            # Save episode (as png)
+            #torchvision.utils.save_image(
+            #    (torch.stack(obs_list) + 1) / 2,
+            #    os.path.join(
+            #        success_episode_path,
+            #        "trajectory.png",
+            #    ),
+            #)
+            # Save subgoals
+            #for kk, subgoal in enumerate(subgoals):
+            #    model.save_image(
+            #        subgoal,
+            #        f"success_{task.replace(' ', '_')}_{episode['idx']}/subgoals_{kk}.png",
+            #    )
+            # Save episode (as gif)
+            #save_gif(
+            #    obs_list, os.path.join(success_episode_path, "trajectory.gif"), duration=1.0
+            #)
+            ## DEBUG
             return True, step
     print(colored("F", "red"), end=" ")
     if args.save_failures:
