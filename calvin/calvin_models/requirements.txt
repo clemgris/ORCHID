@@ -7,12 +7,12 @@ matplotlib
 opencv-python
 omegaconf
 plotly
-pyhash
+#pyhash==0.9.3
 pytorch-lightning==1.8.6
 lightning_lite
 torch==1.13.1
 torchvision
-MulticoreTSNE
+#MulticoreTSNE
 gitpython
 scipy
 sentence-transformers

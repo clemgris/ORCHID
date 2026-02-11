@@ -1,123 +1,342 @@
-## AVDC
+# HD-ExpIt
 
-The official codebase for training video policies in AVDC
+**Hierarchical Diffusion Policy with Expert Iteration**
 
-NEWS: We have released another repository for running our Meta-World and iTHOR experiments [here](https://github.com/flow-diffusion/AVDC_experiments/)!
+This repository contains the official code and checkpoints for the paper:
 
-https://github.com/flow-diffusion/flow-diffusion.github.io/assets/43379407/9aa380df-0ff7-4c41-af2d-d67d23c53e72
+> **Iterative On-Policy Refinement of Hierarchical Diffusion Policies for Language-Conditioned Manipulation**
+> *(under review for ICML 2026)*
 
-This repository contains the code for training video policies presented in our work   
-[Learning to Act from Actionless Videos through Dense Correspondences](https://flow-diffusion.github.io/AVDC.pdf)  
-[Po-Chen Ko](https://pochen-ko.github.io/),
-[Jiayuan Mao](https://jiayuanm.com/),
-[Yilun Du](https://yilundu.github.io/),
-[Shao-Hua Sun](https://shaohua0116.github.io/),
-[Joshua B. Tenenbaum](https://cocosci.mit.edu/josh)  
-[website](https://flow-diffusion.github.io/) | [paper](https://flow-diffusion.github.io/AVDC.pdf) | [arXiv](https://arxiv.org/abs/2310.08576) | [experiment repo](https://github.com/flow-diffusion/AVDC_experiments/)
+---
 
-```bib
-@article{Ko2023Learning,
-  title={{Learning to Act from Actionless Videos through Dense Correspondences}},
-  author={Ko, Po-Chen and Mao, Jiayuan and Du, Yilun and Sun, Shao-Hua and Tenenbaum, Joshua B},
-  journal={arXiv:2310.08576},
-  year={2023},
-}
+## Installation 🛠️
+
+#### 1. Create Conda Env
+```bash
+conda create -n hd-expit python==3.10
 ```
-
-## Updates  
- - 2023/10/21: Support custom task name and any number of videos (Removed task/# of vid constraints leftover from our experiments) 
- - 2024/01/02: Released another repository for Meta-World and iTHOR experiments [here](https://github.com/flow-diffusion/AVDC_experiments/).
- - 2024/01/03: Updated argumants for DDIM sampling and Classifier-Free Guidance. 
-
-## Getting started  
-
-We recommend to create a new environment with pytorch installed using conda.   
-
-```bash  
-conda create -n avdc python=3.9
-conda activate avdc
-conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
-```  
-
-Next, clone the repository and install the requirements  
+#### 2. Install CALVIN
 
 ```bash
-git clone https://github.com/flow-diffusion/AVDC
-cd AVDC
+cd calvin/calvin_env
+pip install -e .
+cd ../calvin_models
 pip install -r requirements.txt
 ```
 
+#### 3. Install Requirements
 
-## Dataset structure
-
-This repo contains example dataset structure in `datasets/`.   
-
-The pytorch dataset classes are defined in `flowdiffusion/datasets.py`
-
-
-## Training models
-
-For Meta-World experiments, run
 ```bash
-cd flowdiffusion
-python train_mw.py --mode train
-# or python train_mw.py -m train
+cd hd-expit/controller
+pip install -e .
+cd ../../
+pip install -r requirements.txt
 ```
 
-or run with `accelerate`
+## Evaluation 🎯
+
+**CALVIN**
+
+Multi-task language-condition (MTLC) benchmark
 ```bash
-accelerate launch train_mw.py
+python hd-expit/evaluate_policy/evaluate_policy_calvin.py \
+    --policy_checkpoint_num 9999 \
+    --policy_results_folder path_2_LL_iter0 \
+    --high_level_checkpoint_num 199 \
+    --high_level_results_folder path_2_HL_iter0 \
+    --eval_folder path_2_eval_MTLC_iter0 \
+    --policy_model diffusion \
+    --replan \
+    --seed 0
 ```
 
-For iTHOR experiments, run `train_thor.py` instead of `train_mw.py`  
-For bridge experiments, run `train_bridge.py` instead of `train_mw.py`  
-
-The trained model should be saved in `../results` folder  
-
-To resume training, you can use `-c` `--checkpoint_num` argument.  
+Long horizon multi-task language-condition (LH-MTLC) benchmark
 ```bash
-# This will resume training with 1st checkpoint (should be named as model-1.pt)
-python train_mw.py --mode train -c 1
+python python hd-expit/evaluate_policy/evaluate_policy_long_horizon_calvin.py \
+    --policy_checkpoint_num 9999 \
+    --policy_results_folder path_2_LL_iter0 \
+    --high_level_checkpoint_num 199 \
+    --high_level_results_folder path_2_HL_iter0 \
+    --eval_folder path_2_eval_LHMTLC_iter0 \
+    --policy_model diffusion \
+    --replan \
+    --seed 0
 ```
 
-## Inferencing
-
-Use the following arguments for inference  
-`-p` `--inference_path`: specify input image path  
-`-t` `--text`: specify the text discription of task   
-`-n` `sample_steps` Optional, the number of steps used in test time sampling. If the specified value less than 100, DDIM sampling will be used.  
-`-g` `guidance_weight` Optional, The weight used for classifier free guidance. Set to positive to turn on classifier free guidance.   
-
-For example:  
+* **Franka-3Blocks**
 ```bash
-python train_mw.py --mode inference -c 1 -p ../examples/assembly.png -t assembly -g 2 -n 20
+python hd-expit/evaluate_policy/evaluate_policy_franka3b.py \
+    --policy_checkpoint_num 9999 \
+    --policy_results_folder path_2_LL_iter0 \
+    --high_level_checkpoint_num 199 \
+    --high_level_results_folder path_2_HL_iter0 \
+    --eval_folder path_2_eval_iter0 \
+    --policy_model diffusion \
+    --replan \
+    --seed 0
 ```
 
-## Pretrained models 
 
-We also provide checkpoints of the models described in our experiments as following.   
-[Meta-World](https://huggingface.co/Po-Chen/flowdiffusion/resolve/main/ckpts/metaworld/model-24.pt) |  [iTHOR](https://huggingface.co/Po-Chen/flowdiffusion/resolve/main/ckpts/ithor/model-30.pt) | [Bridge](https://huggingface.co/Po-Chen/flowdiffusion/resolve/main/ckpts/bridge/model-42.pt)   
+## Iterative Fine-Tuning Pipeline 🔄
 
-Download and put the .pt file in `results/[environment]` folder. The resulting directory structure should be `results/{mw, thor, bridge}/model-[x].pt`, for example `results/mw/model-24.pt`
+### A. Train on the Initial Dataset
 
-Or use `download.sh`
+#### 1. Prepare the Initial Dataset
+
+Download or create an initial expert dataset:
+
+* **CALVIN**: download the `D_D` dataset following the official CALVIN repository instructions (https://github.com/mees/calvin).
+* **Franka-3Blocks**: generate an expert dataset using:
+
 ```bash
-./download.sh metaworld
-# ./download.sh ithor
-# ./download.sh bridge
+python franka_3blocks_env_pybullet/generate_data.py \
+    --saving_path path_2_dataset0 \
+    --num_trials 200 \
+    --num_episodes 100
 ```
 
-After this, you can use argument `-c [x]` to resume training or inference with our checkpoint. For example:  
+---
+
+#### 2. Train the High-Level (HL) Policy
+
+**CALVIN**
 ```bash
-python train_mw.py --mode train -c 24
+accelerate launch hd-expit/train_planner/train_calvin.py \
+    --data_paths path_2_dataset0 \
+    --train_num_steps 500000 \
+    --batch_size 8 \
+    --diff_objective pred_v \
+    --text_encoder CLIP \
+    --result_folder path_2_HL_iter0
 ```
-Or  
+**Franka3Blocks**
 ```bash
-python train_mw.py --mode inference -c 24 -p ../examples/assembly.png -t assembly
+accelerate launch hd-expit/train_planner/train_franka3b.py \
+    --data_paths path_2_dataset0 \
+    --train_num_steps 500000 \
+    --batch_size 8 \
+    --diff_objective pred_v \
+    --text_encoder CLIP \
+    --result_folder path_2_HL_iter0
 ```
 
-## Acknowledgements
+---
 
-This codebase is modified from the following repositories:  
-[imagen-pytorch](https://github.com/lucidrains/imagen-pytorch)  
-[guided-diffusion](https://github.com/openai/guided-diffusion)  
+#### 3. Train the Low-Level (LL) Policy
+
+Diffusion-based low-level policy (**CALVIN**):
+
+```bash
+python hd-expit/train_policy/train_policy_calvin.py \
+    --data_paths path_2_dataset0 \
+    --training_steps 1000000 \
+    --batch_size 32 \
+    --result_folder path_2_LL_iter0
+```
+
+ACT-based low-level policy (**CALVIN**):
+
+```bash
+python hd-expit/train/train_policy_calvin_act.py \
+    --data_paths path_2_dataset0 \
+    --training_steps 500000 \
+    --batch_size 128 \
+    --result_folder path_2_ACT_LL_iter0
+```
+
+Diffusion-based low-level policy (**Franka3Blocks**):
+
+```bash
+python hd-expit/train_policy/train_policy_franka3b.py \
+    --data_paths path_2_dataset0 \
+    --training_steps 1000000 \
+    --batch_size 32 \
+    --result_folder path_2_LL_iter0
+```
+
+---
+
+### B. Generate New Data
+
+#### 1. Extract Context Buffers
+
+Contexts consist of the **initial environment state** and the **language instruction**.
+
+Two types of contexts are used:
+
+* **Expert-replayed contexts**
+* **Reset contexts**
+
+**Expert-replayed contexts**
+
+**CALVIN**
+```bash
+python hd-expit/generate_data/save_buffer.py \
+    --data_path path_2_dataset0 \
+    --policy_checkpoint_num 9999 \
+    --policy_results_folder path_2_LL_iter0 \
+    --mode "end_all" 
+```
+
+**Franka3Blocks**
+```bash
+python franka_3blocks_env_pybullet/save_buffer.py \
+    --data_path path_2_dataset0 \
+    --mode "end_all" 
+```
+
+**Reset contexts**
+
+**CALVIN**
+```bash
+python hd-expit/generate_data/save_buffer.py \
+    --data_path path_2_dataset0 \
+    --policy_checkpoint_num 9999 \
+    --policy_results_folder path_2_LL_iter0 \
+    --mode "reset" 
+```
+
+**Franka3Blocks**
+```bash
+python franka_3blocks_env_pybullet/save_buffer.py \
+    --data_path path_2_dataset0 \
+    --mode "reset" 
+```
+
+#### 2. Merge Context Buffers
+
+**CALVIN**
+```python
+from generate_data.state_buffer import StateBuffer
+
+buffer_path_1 = 'path_2_end_dataset1/training/state_buffer_end_all.pkl'
+buffer_path_2 = 'path_2_reset_dataset1/training/state_buffer_end_all.pkl'
+
+buffer1 = StateBuffer(tasks.keys(), max_size=1e6)
+buffer1.load(buffer_path_1)
+
+buffer2 = StateBuffer(tasks.keys(), max_size=1e6)
+buffer2.load(buffer_path_2)
+
+buffer_merged = StateBuffer(tasks.keys(), max_size=1e6)
+buffer_merged.load(buffer_path_1)
+
+for s in buffer2.buffer:
+    buffer_merged.add(s)
+
+merged_buffer_save_path = "path_2_dataset1/training/state_buffer_merged_end_all.pkl"
+buffer_merged.save(merged_buffer_save_path)
+print(f"Saved state buffer to {merged_buffer_save_path}")
+```
+
+
+**Franka3Blocks**
+```python
+import pickle
+
+buffer_path_1 = 'path_2_end_dataset1/training/state_buffer_end_all.pkl'
+buffer_path_2 = 'path_2_reset_dataset1/training/state_buffer_end_all.pkl'
+
+with open(buffer_path_1, "rb") as f:
+    data_1 = pickle.load(f)
+
+with open(buffer_path_2, "rb") as f:
+    data_2 = pickle.load(f)
+
+data = data_1 + data_2
+
+with open("path_2_dataset1/training/state_buffer_end_reset_all.pkl", "wb") as f:
+    pickle.dump(data, f)
+```
+
+---
+
+#### 3. Generate New Rollouts
+
+**CALVIN**
+```bash
+python hd-expit/generate_data/generate_new_data_calvin.py \
+    --policy_checkpoint_num 9999 \
+    --policy_results_folder path_2_LL \
+    --high_level_checkpoint_num 199 \
+    --high_level_results_folder path_2_HL \
+    --policy_model diffusion \
+    --saving_path path_2_dataset1 \
+    --num_data 100 \
+    --num_trials 5 \
+    --buffer_save_path path_2_merged_buffer
+```
+
+**Franka3Blocks**
+```bash
+python hd-expit/generate_data/generate_new_data_franka3b.py \
+    --policy_checkpoint_num 9999 \
+    --policy_results_folder path_2_LL \
+    --high_level_checkpoint_num 199 \
+    --high_level_results_folder path_2_HL \
+    --policy_model diffusion \
+    --saving_path path_2_dataset1 \
+    --num_data 100 \
+    --num_trials 5 \
+    --buffer_save_path path_2_merged_buffer
+```
+
+---
+
+### C. Dataset Aggregation
+
+* **HD-ExpIt**: train from scratch on the full aggregated dataset.
+
+**CALVIN**
+```bash
+accelerate launch hd-expit/train_planner/train_calvin.py \
+    --data_paths path_2_dataset0 path_2_dataset1 \
+    --train_num_steps 750000 \
+    --batch_size 8 \
+    --diff_objective pred_v \
+    --text_encoder CLIP \
+    --result_folder path_2_HL_iter1
+```
+
+```bash
+python hd-expit/train_policy/train_policy_calvin.py \
+    --data_paths path_2_dataset0 path_2_dataset1\
+    --training_steps 1500000 \
+    --batch_size 32 \
+    --result_folder path_2_LL_iter1
+```
+
+* **HD-ExpIt-ft**: fine-tune starting from the previous iteration’s policy.
+
+**CALVIN**
+```bash
+accelerate launch hd-expit/train_planner/ft_calvin.py \
+    --data_paths path_2_dataset1 \
+    --train_num_steps 50000 \
+    --batch_size 8 \
+    --diff_objective pred_v \
+    --text_encoder CLIP \
+    --result_folder path_2_HL_ft_iter1 \
+    --pretrained_results_folder path_2_HL_iter0 \
+    --checkpoint_num 199
+```
+
+```bash
+python hd-expit/train_policy/ft_policy_calvin.py \
+    --data_paths path_2_dataset1\
+    --training_steps 200000 \
+    --batch_size 32 \
+    --result_folder path_2_LL_ft_iter1 \
+    --pretrained_results_folder path_2_LL_iter0 \
+    --checkpoint_num 9999
+```
+
+---
+
+## Acknowledgements 📚
+
+This repository builds upon and is inspired by the following projects:
+
+- **CALVIN**: https://github.com/mees/calvin.git (commit `dd37755`)
+- **AVDC**: https://github.com/flow-diffusion/AVDC.git (commit `176fbe1`)
+- **LeRobot**: https://github.com/huggingface/lerobot.git (version `0.1.0`)

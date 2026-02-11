@@ -1,8 +1,28 @@
-results
-lerobot
-__pycache__
-calvin/dataset
-lorel/data
-ipynb_checkpoints
-results_*
+# ======================
+# Python
+# ======================
+__pycache__/
 .ipynb_checkpoints/
+*.pyc
+
+# ======================
+# Jupyter
+# ======================
+.ipynb_checkpoints/
+
+# ======================
+# Project outputs
+# ======================
+results/
+results_*/
+
+# ======================
+# Datasets & models
+# ======================
+calvin/dataset/
+calvin/models/
+
+# ======================
+# Environments / assets
+# ======================
+toy_env_pybullet/data/
