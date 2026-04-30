@@ -164,10 +164,10 @@ Contexts consist of the **initial environment state** and the **language instruc
 
 Two types of contexts are used:
 
-* **Expert-replayed contexts**
+* **Replayed contexts**
 * **Reset contexts**
 
-**Expert-replayed contexts**
+**Replayed contexts**
 
 **CALVIN**
 ```bash
