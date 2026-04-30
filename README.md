@@ -1,11 +1,11 @@
-# HD-ExpIt
+# 🌺 ORCHID
 
-**Hierarchical Diffusion Policy with Expert Iteration**
+**Fine-tuning Hierarchical Diffusion Policy with Iterative Self-Training**
 
 This repository contains the official code and checkpoints for the paper:
 
-> **Iterative On-Policy Refinement of Hierarchical Diffusion Policies for Language-Conditioned Manipulation**
-> *(under review for ICML 2026)*
+> **On-Policy Refinement for Co-Adaptation in Hierarchical Diffusion**
+> *(under review for Neurips 2026)*
 
 ---
 
@@ -13,7 +13,7 @@ This repository contains the official code and checkpoints for the paper:
 
 #### 1. Create Conda Env
 ```bash
-conda create -n hd-expit python==3.10
+conda create -n orchid python==3.10
 ```
 #### 2. Install CALVIN
 
@@ -27,7 +27,7 @@ pip install -r requirements.txt
 #### 3. Install Requirements
 
 ```bash
-cd hd-expit/controller
+cd orchid/controller
 pip install -e .
 cd ../../
 pip install -r requirements.txt
@@ -39,7 +39,7 @@ pip install -r requirements.txt
 
 Multi-task language-condition (MTLC) benchmark
 ```bash
-python hd-expit/evaluate_policy/evaluate_policy_calvin.py \
+python orchid/evaluate_policy/evaluate_policy_calvin.py \
     --policy_checkpoint_num 9999 \
     --policy_results_folder path_2_LL_iter0 \
     --high_level_checkpoint_num 199 \
@@ -52,7 +52,7 @@ python hd-expit/evaluate_policy/evaluate_policy_calvin.py \
 
 Long horizon multi-task language-condition (LH-MTLC) benchmark
 ```bash
-python python hd-expit/evaluate_policy/evaluate_policy_long_horizon_calvin.py \
+python python orchid/evaluate_policy/evaluate_policy_long_horizon_calvin.py \
     --policy_checkpoint_num 9999 \
     --policy_results_folder path_2_LL_iter0 \
     --high_level_checkpoint_num 199 \
@@ -65,7 +65,7 @@ python python hd-expit/evaluate_policy/evaluate_policy_long_horizon_calvin.py \
 
 * **Franka-3Blocks**
 ```bash
-python hd-expit/evaluate_policy/evaluate_policy_franka3b.py \
+python orchid/evaluate_policy/evaluate_policy_franka3b.py \
     --policy_checkpoint_num 9999 \
     --policy_results_folder path_2_LL_iter0 \
     --high_level_checkpoint_num 199 \
@@ -101,7 +101,7 @@ python franka_3blocks_env_pybullet/generate_data.py \
 
 **CALVIN**
 ```bash
-accelerate launch hd-expit/train_planner/train_calvin.py \
+accelerate launch orchid/train_planner/train_calvin.py \
     --data_paths path_2_dataset0 \
     --train_num_steps 500000 \
     --batch_size 8 \
@@ -111,7 +111,7 @@ accelerate launch hd-expit/train_planner/train_calvin.py \
 ```
 **Franka3Blocks**
 ```bash
-accelerate launch hd-expit/train_planner/train_franka3b.py \
+accelerate launch orchid/train_planner/train_franka3b.py \
     --data_paths path_2_dataset0 \
     --train_num_steps 500000 \
     --batch_size 8 \
@@ -127,7 +127,7 @@ accelerate launch hd-expit/train_planner/train_franka3b.py \
 Diffusion-based low-level policy (**CALVIN**):
 
 ```bash
-python hd-expit/train_policy/train_policy_calvin.py \
+python orchid/train_policy/train_policy_calvin.py \
     --data_paths path_2_dataset0 \
     --training_steps 1000000 \
     --batch_size 32 \
@@ -137,7 +137,7 @@ python hd-expit/train_policy/train_policy_calvin.py \
 ACT-based low-level policy (**CALVIN**):
 
 ```bash
-python hd-expit/train/train_policy_calvin_act.py \
+python orchid/train/train_policy_calvin_act.py \
     --data_paths path_2_dataset0 \
     --training_steps 500000 \
     --batch_size 128 \
@@ -147,7 +147,7 @@ python hd-expit/train/train_policy_calvin_act.py \
 Diffusion-based low-level policy (**Franka3Blocks**):
 
 ```bash
-python hd-expit/train_policy/train_policy_franka3b.py \
+python orchid/train_policy/train_policy_franka3b.py \
     --data_paths path_2_dataset0 \
     --training_steps 1000000 \
     --batch_size 32 \
@@ -171,7 +171,7 @@ Two types of contexts are used:
 
 **CALVIN**
 ```bash
-python hd-expit/generate_data/save_buffer.py \
+python orchid/generate_data/save_buffer.py \
     --data_path path_2_dataset0 \
     --policy_checkpoint_num 9999 \
     --policy_results_folder path_2_LL_iter0 \
@@ -189,7 +189,7 @@ python franka_3blocks_env_pybullet/save_buffer.py \
 
 **CALVIN**
 ```bash
-python hd-expit/generate_data/save_buffer.py \
+python orchid/generate_data/save_buffer.py \
     --data_path path_2_dataset0 \
     --policy_checkpoint_num 9999 \
     --policy_results_folder path_2_LL_iter0 \
@@ -255,7 +255,7 @@ with open("path_2_dataset1/training/state_buffer_end_reset_all.pkl", "wb") as f:
 
 **CALVIN**
 ```bash
-python hd-expit/generate_data/generate_new_data_calvin.py \
+python orchid/generate_data/generate_new_data_calvin.py \
     --policy_checkpoint_num 9999 \
     --policy_results_folder path_2_LL \
     --high_level_checkpoint_num 199 \
@@ -269,7 +269,7 @@ python hd-expit/generate_data/generate_new_data_calvin.py \
 
 **Franka3Blocks**
 ```bash
-python hd-expit/generate_data/generate_new_data_franka3b.py \
+python orchid/generate_data/generate_new_data_franka3b.py \
     --policy_checkpoint_num 9999 \
     --policy_results_folder path_2_LL \
     --high_level_checkpoint_num 199 \
@@ -285,11 +285,11 @@ python hd-expit/generate_data/generate_new_data_franka3b.py \
 
 ### C. Dataset Aggregation
 
-* **HD-ExpIt**: train from scratch on the full aggregated dataset.
+* **orchid**: train from scratch on the full aggregated dataset.
 
 **CALVIN**
 ```bash
-accelerate launch hd-expit/train_planner/train_calvin.py \
+accelerate launch orchid/train_planner/train_calvin.py \
     --data_paths path_2_dataset0 path_2_dataset1 \
     --train_num_steps 750000 \
     --batch_size 8 \
@@ -299,18 +299,18 @@ accelerate launch hd-expit/train_planner/train_calvin.py \
 ```
 
 ```bash
-python hd-expit/train_policy/train_policy_calvin.py \
+python orchid/train_policy/train_policy_calvin.py \
     --data_paths path_2_dataset0 path_2_dataset1\
     --training_steps 1500000 \
     --batch_size 32 \
     --result_folder path_2_LL_iter1
 ```
 
-* **HD-ExpIt-ft**: fine-tune starting from the previous iteration’s policy.
+* **orchid-ft**: fine-tune starting from the previous iteration’s policy.
 
 **CALVIN**
 ```bash
-accelerate launch hd-expit/train_planner/ft_calvin.py \
+accelerate launch orchid/train_planner/ft_calvin.py \
     --data_paths path_2_dataset1 \
     --train_num_steps 50000 \
     --batch_size 8 \
@@ -322,7 +322,7 @@ accelerate launch hd-expit/train_planner/ft_calvin.py \
 ```
 
 ```bash
-python hd-expit/train_policy/ft_policy_calvin.py \
+python orchid/train_policy/ft_policy_calvin.py \
     --data_paths path_2_dataset1\
     --training_steps 200000 \
     --batch_size 32 \
