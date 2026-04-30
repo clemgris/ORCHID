@@ -35,6 +35,10 @@ pip install -r requirements.txt
 
 ## Evaluation 🎯
 
+**Model's checkpoints**
+
+To maintain double-blind integrity, model checkpoints will be made available in the final version of this work.
+
 **CALVIN**
 
 Multi-task language-condition (MTLC) benchmark
