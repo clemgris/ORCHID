@@ -5,7 +5,6 @@
 This repository contains the official code and checkpoints for the paper:
 
 > **Online Self-Training for Co-Adaptation in Hierarchical Diffusion**
-> *(under review for Neurips 2026)*
 
 ---
 
