@@ -4,7 +4,7 @@
 
 This repository contains the official code and checkpoints for the paper:
 
-> **On-Policy Refinement for Co-Adaptation in Hierarchical Diffusion**
+> **Online Self-Training for Co-Adaptation in Hierarchical Diffusion**
 > *(under review for Neurips 2026)*
 
 ---
